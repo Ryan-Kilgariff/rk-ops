@@ -1,0 +1,127 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Issue
+{% endblock %}
+{% block topbar_title %}
+{% if form_mode == "edit" %}Edit Issue{% else %}New Issue{% endif %}
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Issues
+</p>
+<h1 class="page-title">
+    {% if form_mode == "edit" %}
+        Edit issue
+    {% else %}
+        Report issue
+    {% endif %}
+</h1>
+<p class="page-subtitle">
+    {% if form_mode == "edit" %}
+        Update {{ issue.title }}.
+    {% else %}
+        Record an operational issue at {{ property.name }}.
+    {% endif %}
+</p>
+<section class="section">
+    <form
+        method="post"
+        class="form-card"
+    >
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                </label>
+                {{ field }}
+                {% if field.help_text %}
+                    <div class="help-text">
+                        {{ field.help_text }}
+                    </div>
+                {% endif %}
+                {% for error in field.errors %}
+                    <div class="field-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        <div class="form-actions">
+            <a
+                href="{% url 'operations:issue_list' %}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
+            <button
+                type="submit"
+                class="button"
+            >
+                {% if form_mode == "edit" %}
+                    Save Changes
+                {% else %}
+                    Report Issue
+                {% endif %}
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.form-card {
+    max-width: 760px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 26px;
+}
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 7px;
+    font-size: 14px;
+    font-weight: 700;
+}
+.form-control {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 11px 12px;
+    font: inherit;
+}
+textarea.form-control {
+    resize: vertical;
+}
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 28px;
+}
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    padding: 10px 15px;
+    border: 1px solid #d1d5db;
+    background: white;
+    font-size: 14px;
+    font-weight: 700;
+}
+.help-text {
+    margin-top: 5px;
+    color: #6b7280;
+    font-size: 13px;
+}
+.field-error {
+    margin-top: 5px;
+    color: #b91c1c;
+    font-size: 13px;
+}
+</style>
+{% endblock %}
