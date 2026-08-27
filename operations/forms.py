@@ -1,6 +1,11 @@
 from django import forms
-from .models import Task
-from .models import HandoverNote, Issue, Task
+from .models import (
+    Checklist,
+    ChecklistItem,
+    HandoverNote,
+    Issue,
+    Task,
+)
 from django.contrib.auth import get_user_model
 from accounts.models import PropertyMembership
 User = get_user_model()
@@ -49,29 +54,29 @@ class TaskForm(forms.ModelForm):
                 attrs={"class": "form-control"}
             ),
         }
-        def __init__(self, *args, property_obj=None, **kwargs):
-            super().__init__(*args, **kwargs)
-            if property_obj is not None:
-                allowed_user_ids = (
-                    PropertyMembership.objects
-                    .filter(
-                        property=property_obj,
-                        is_active=True,
-                    )
-                    .values_list(
-                        "user_id",
-                        flat=True,
-                    )
+    def __init__(self, *args, property_obj=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if property_obj is not None:
+            allowed_user_ids = (
+                PropertyMembership.objects
+                .filter(
+                    property=property_obj,
+                    is_active=True,
                 )
-                self.fields["assigned_to"].queryset = (
-                    User.objects
-                    .filter(id__in=allowed_user_ids)
-                    .order_by(
-                        "first_name",
-                        "last_name",
-                        "username",
-                    )
+                .values_list(
+                    "user_id",
+                    flat=True,
                 )
+            )
+            self.fields["assigned_to"].queryset = (
+                User.objects
+                .filter(id__in=allowed_user_ids)
+                .order_by(
+                    "first_name",
+                    "last_name",
+                    "username",
+                )
+            )
 class IssueForm(forms.ModelForm):
     class Meta:
         model = Issue
@@ -125,29 +130,29 @@ class IssueForm(forms.ModelForm):
                 }
             ),
         }
-        def __init__(self, *args, property_obj=None, **kwargs):
-            super().__init__(*args, **kwargs)
-            if property_obj is not None:
-                allowed_user_ids = (
-                    PropertyMembership.objects
-                    .filter(
-                        property=property_obj,
-                        is_active=True,
-                    )
-                    .values_list(
-                        "user_id",
-                        flat=True,
-                    )
+    def __init__(self, *args, property_obj=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if property_obj is not None:
+            allowed_user_ids = (
+                PropertyMembership.objects
+                .filter(
+                    property=property_obj,
+                    is_active=True,
                 )
-                self.fields["assigned_to"].queryset = (
-                    User.objects
-                    .filter(id__in=allowed_user_ids)
-                    .order_by(
-                        "first_name",
-                        "last_name",
-                        "username",
-                    )
+                .values_list(
+                    "user_id",
+                    flat=True,
                 )
+            )
+            self.fields["assigned_to"].queryset = (
+                User.objects
+                .filter(id__in=allowed_user_ids)
+                .order_by(
+                    "first_name",
+                    "last_name",
+                    "username",
+                )
+            )
 class HandoverNoteForm(forms.ModelForm):
     class Meta:
         model = HandoverNote
@@ -171,6 +176,59 @@ class HandoverNoteForm(forms.ModelForm):
                         "e.g. Room 206 arriving after 11pm. "
                         "Key prepared at reception."
                     ),
+                }
+            ),
+        }
+class ChecklistForm(forms.ModelForm):
+    class Meta:
+        model = Checklist
+        fields = [
+            "name",
+            "description",
+            "is_active",
+        ]
+        widgets = {
+            "name": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. Reception Opening",
+                }
+            ),
+            "description": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                    "placeholder": "Describe when this checklist should be used...",
+                }
+            ),
+        }
+class ChecklistItemForm(forms.ModelForm):
+    class Meta:
+        model = ChecklistItem
+        fields = [
+            "title",
+            "description",
+            "order",
+            "is_required",
+        ]
+        widgets = {
+            "title": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. Check today's arrivals",
+                }
+            ),
+            "description": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 3,
+                    "placeholder": "Optional instructions...",
+                }
+            ),
+            "order": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "min": 0,
                 }
             ),
         }

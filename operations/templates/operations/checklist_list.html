@@ -6,15 +6,27 @@ RK Ops | Checklists
 Checklists
 {% endblock %}
 {% block content %}
-<p class="page-eyebrow">
-    Operations
-</p>
-<h1 class="page-title">
-    Checklists
-</h1>
-<p class="page-subtitle">
-    Run repeatable operational procedures at {{ property.name }}.
-</p>
+<div class="section-header">
+    <div>
+        <p class="page-eyebrow">
+            Operations
+        </p>
+        <h1 class="page-title">
+            Checklists
+        </h1>
+        <p class="page-subtitle">
+            Run repeatable operational procedures at {{ property.name }}.
+        </p>
+    </div>
+    {% if can_manage_team %}
+        <a
+            href="{% url 'operations:checklist_manage' property.slug %}"
+            class="button"
+        >
+            Manage Templates
+        </a>
+    {% endif %}
+</div>
 <section class="section">
     <h2 class="section-title">
         Available Checklists

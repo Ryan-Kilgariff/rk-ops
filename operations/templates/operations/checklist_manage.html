@@ -1,0 +1,103 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Manage Checklists
+{% endblock %}
+{% block topbar_title %}
+Checklist Templates
+{% endblock %}
+{% block content %}
+<div class="section-header">
+    <div>
+        <p class="page-eyebrow">
+            Checklists
+        </p>
+        <h1 class="page-title">
+            Manage Templates
+        </h1>
+        <p class="page-subtitle">
+            Create and maintain operational checklists for {{ property.name }}.
+        </p>
+    </div>
+    <a
+        href="{% url 'operations:checklist_create' property.slug %}"
+        class="button"
+    >
+        + New Checklist
+    </a>
+</div>
+<section class="section">
+    <div class="template-list">
+        {% for checklist in checklists %}
+            <article class="template-card">
+                <div>
+                    <h3>
+                        {{ checklist.name }}
+                    </h3>
+                    {% if checklist.description %}
+                        <p>
+                            {{ checklist.description }}
+                        </p>
+                    {% endif %}
+                    <div class="task-meta">
+                        {{ checklist.items.count }} items
+                        ·
+                        {% if checklist.is_active %}
+                            Active
+                        {% else %}
+                            Inactive
+                        {% endif %}
+                    </div>
+                </div>
+                <a
+                    href="{% url 'operations:checklist_edit' property.slug checklist.pk %}"
+                    class="secondary-button"
+                >
+                    Edit
+                </a>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                No checklist templates have been created yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.template-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: center;
+}
+.template-card h3 {
+    margin: 0 0 7px;
+}
+.template-card p {
+    margin: 0 0 10px;
+    color: #6b7280;
+    line-height: 1.5;
+}
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 9px 13px;
+    background: white;
+    font-size: 14px;
+    font-weight: 700;
+}
+</style>
+{% endblock %}

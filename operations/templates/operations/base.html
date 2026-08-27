@@ -203,6 +203,39 @@
             border-radius: 10px;
             color: #6b7280;
         }
+        .property-switcher {
+            margin-bottom: 24px;
+        }
+        .property-select {
+            width: 100%;
+            appearance: none;
+            -webkit-appearance: none;
+            background: #1f2937;
+            color: white;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 11px 36px 11px 12px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            background-image:
+                linear-gradient(45deg, transparent 50%, #9ca3af 50%),
+                linear-gradient(135deg, #9ca3af 50%, transparent 50%);
+            background-position:
+                calc(100% - 16px) 50%,
+                calc(100% - 11px) 50%;
+            background-size:
+                5px 5px,
+                5px 5px;
+            background-repeat: no-repeat;
+        }
+        .property-select:hover {
+            border-color: #6b7280;
+        }
+        .property-select:focus {
+            outline: none;
+            border-color: #9ca3af;
+        }
         @media (max-width: 900px) {
             .sidebar {
                 width: 210px;
@@ -252,8 +285,28 @@
         <div class="brand">
             RK OPS
         </div>
-        <div class="property-name">
-            {{ property.name|default:"Operations" }}
+        <div class="property-switcher">
+            {% if accessible_properties|length > 1 %}
+                <select
+                    onchange="if (this.value) window.location.href=this.value;"
+                    class="property-select"
+                >
+                    {% for available_property in accessible_properties %}
+                        <option
+                            value="{% url 'operations:dashboard' available_property.slug %}"
+                            {% if property.slug == available_property.slug %}
+                                selected
+                            {% endif %}
+                        >
+                            {{ available_property.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            {% else %}
+                <div class="property-name">
+                    {{ property.name|default:"Operations" }}
+                </div>
+            {% endif %}
         </div>
         <nav class="nav">
             <a

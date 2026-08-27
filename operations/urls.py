@@ -107,4 +107,34 @@ urlpatterns = [
         views.team_member_edit,
         name="team_member_edit",
     ),
+    path(
+        "p/<slug:property_slug>/checklists/manage/",
+        views.checklist_manage,
+        name="checklist_manage",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/manage/new/",
+        views.checklist_create,
+        name="checklist_create",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/manage/<int:pk>/",
+        views.checklist_edit,
+        name="checklist_edit",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/manage/<int:checklist_pk>/items/new/",
+        views.checklist_item_create,
+        name="checklist_item_create",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/manage/<int:checklist_pk>/items/<int:item_pk>/edit/",
+        views.checklist_item_edit,
+        name="checklist_item_edit",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/manage/<int:checklist_pk>/items/<int:item_pk>/delete/",
+        views.checklist_item_delete,
+        name="checklist_item_delete",
+    ),
 ]

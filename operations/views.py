@@ -1,25 +1,29 @@
-from django.shortcuts import get_object_or_404, render
-from django.utils import timezone
-from properties.models import Property
-from .models import Task
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
-from .forms import TaskForm
-from .forms import HandoverNoteForm, IssueForm, TaskForm
-from .models import (
-    Checklist,
-    ChecklistCompletion,
-    ChecklistRun,
-    ChecklistItem,
-    HandoverNote,
-    Issue,
-    Task,
-)
+from django.utils import timezone
 from accounts.forms import (
     MembershipEditForm,
     TeamMemberCreateForm,
 )
 from accounts.models import PropertyMembership
-from django.contrib.auth.decorators import login_required
+from properties.models import Property
+from .forms import (
+    ChecklistForm,
+    ChecklistItemForm,
+    HandoverNoteForm,
+    IssueForm,
+    TaskForm,
+)
+from .models import (
+    Checklist,
+    ChecklistCompletion,
+    ChecklistItem,
+    ChecklistRun,
+    HandoverNote,
+    Issue,
+    Task,
+)
 from .utils import (
     get_property_for_user,
     require_management_access,
@@ -142,6 +146,7 @@ def task_list(request, property_slug):
         tasks = tasks.filter(priority=priority_filter)
     context = {
         "property": property_obj,
+        "membership": membership,
         "tasks": tasks,
         "status_filter": status_filter,
         "priority_filter": priority_filter,
@@ -149,9 +154,10 @@ def task_list(request, property_slug):
         "priority_choices": Task.Priority.choices,
         "active_page": "tasks",
     }
-    return redirect(
-        "operations:task_list",
-        property_slug=property_obj.slug,
+    return render(
+        request,
+        "operations/task_list.html",
+        context,
     )
 @login_required
 def task_create(request, property_slug):
@@ -278,6 +284,7 @@ def issue_list(request, property_slug):
         issues = issues.filter(priority=priority_filter)
     context = {
         "property": property_obj,
+        "membership": membership,
         "issues": issues,
         "status_filter": status_filter,
         "priority_filter": priority_filter,
@@ -760,4 +767,209 @@ def team_member_edit(request, property_slug, pk):
         request,
         "operations/team_form.html",
         context,
+    )
+@login_required
+def checklist_manage(request, property_slug):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    checklists = (
+        Checklist.objects
+        .filter(property=property_obj)
+        .prefetch_related("items")
+        .order_by("name")
+    )
+    context = {
+        "property": property_obj,
+        "checklists": checklists,
+        "active_page": "checklists",
+    }
+    return render(
+        request,
+        "operations/checklist_manage.html",
+        context,
+    )
+@login_required
+def checklist_create(request, property_slug):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    if request.method == "POST":
+        form = ChecklistForm(request.POST)
+        if form.is_valid():
+            checklist = form.save(commit=False)
+            checklist.property = property_obj
+            checklist.save()
+            return redirect(
+                "operations:checklist_edit",
+                property_slug=property_obj.slug,
+                pk=checklist.pk,
+            )
+    else:
+        form = ChecklistForm()
+    context = {
+        "property": property_obj,
+        "form": form,
+        "active_page": "checklists",
+    }
+    return render(
+        request,
+        "operations/checklist_form.html",
+        context,
+    )
+@login_required
+def checklist_edit(request, property_slug, pk):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    checklist = get_object_or_404(
+        Checklist,
+        pk=pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        form = ChecklistForm(
+            request.POST,
+            instance=checklist,
+        )
+        if form.is_valid():
+            form.save()
+            return redirect(
+                "operations:checklist_edit",
+                property_slug=property_obj.slug,
+                pk=checklist.pk,
+            )
+    else:
+        form = ChecklistForm(
+            instance=checklist,
+        )
+    items = checklist.items.all()
+    context = {
+        "property": property_obj,
+        "checklist": checklist,
+        "items": items,
+        "form": form,
+        "active_page": "checklists",
+        "form_mode": "edit",
+    }
+    return render(
+        request,
+        "operations/checklist_form.html",
+        context,
+    )
+@login_required
+def checklist_item_create(request, property_slug, checklist_pk):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    checklist = get_object_or_404(
+        Checklist,
+        pk=checklist_pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        form = ChecklistItemForm(request.POST)
+        if form.is_valid():
+            item = form.save(commit=False)
+            item.checklist = checklist
+            item.save()
+            return redirect(
+                "operations:checklist_edit",
+                property_slug=property_obj.slug,
+                pk=checklist.pk,
+            )
+    else:
+        form = ChecklistItemForm()
+    context = {
+        "property": property_obj,
+        "checklist": checklist,
+        "form": form,
+        "active_page": "checklists",
+    }
+    return render(
+        request,
+        "operations/checklist_item_form.html",
+        context,
+    )
+@login_required
+def checklist_item_edit(
+    request,
+    property_slug,
+    checklist_pk,
+    item_pk,
+):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    checklist = get_object_or_404(
+        Checklist,
+        pk=checklist_pk,
+        property=property_obj,
+    )
+    item = get_object_or_404(
+        ChecklistItem,
+        pk=item_pk,
+        checklist=checklist,
+    )
+    if request.method == "POST":
+        form = ChecklistItemForm(
+            request.POST,
+            instance=item,
+        )
+        if form.is_valid():
+            form.save()
+            return redirect(
+                "operations:checklist_edit",
+                property_slug=property_obj.slug,
+                pk=checklist.pk,
+            )
+    else:
+        form = ChecklistItemForm(
+            instance=item,
+        )
+    context = {
+        "property": property_obj,
+        "checklist": checklist,
+        "item": item,
+        "form": form,
+        "active_page": "checklists",
+        "form_mode": "edit",
+    }
+    return render(
+        request,
+        "operations/checklist_item_form.html",
+        context,
+    )
+@login_required
+def checklist_item_delete(
+    request,
+    property_slug,
+    checklist_pk,
+    item_pk,
+):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    checklist = get_object_or_404(
+        Checklist,
+        pk=checklist_pk,
+        property=property_obj,
+    )
+    item = get_object_or_404(
+        ChecklistItem,
+        pk=item_pk,
+        checklist=checklist,
+    )
+    if request.method == "POST":
+        item.delete()
+    return redirect(
+        "operations:checklist_edit",
+        property_slug=property_obj.slug,
+        pk=checklist.pk,
     )

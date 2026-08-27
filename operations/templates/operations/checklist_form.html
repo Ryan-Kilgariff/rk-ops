@@ -1,0 +1,194 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Checklist Template
+{% endblock %}
+{% block topbar_title %}
+Checklist Template
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Checklists
+</p>
+<h1 class="page-title">
+    {% if form_mode == "edit" %}
+        Edit checklist
+    {% else %}
+        New checklist
+    {% endif %}
+</h1>
+<section class="section">
+    <form
+        method="post"
+        class="form-card"
+    >
+        {% csrf_token %}
+        {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">
+                    {{ field.label }}
+                </label>
+                {{ field }}
+                {% for error in field.errors %}
+                    <div class="field-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endfor %}
+        <div class="form-actions">
+            <a
+                href="{% url 'operations:checklist_manage' property.slug %}"
+                class="secondary-button"
+            >
+                Back
+            </a>
+            <button
+                type="submit"
+                class="button"
+            >
+                Save Checklist
+            </button>
+        </div>
+    </form>
+</section>
+{% if checklist %}
+<section class="section">
+    <div class="section-header">
+        <h2 class="section-title">
+            Checklist Items
+        </h2>
+        <a
+            href="{% url 'operations:checklist_item_create' property.slug checklist.pk %}"
+            class="button"
+        >
+            + Add Item
+        </a>
+    </div>
+    <div class="item-list">
+        {% for item in items %}
+            <article class="item-card">
+                <div>
+                    <strong>
+                        {{ item.order }} · {{ item.title }}
+                    </strong>
+                    {% if item.description %}
+                        <div class="task-meta">
+                            {{ item.description }}
+                        </div>
+                    {% endif %}
+                    <div class="task-meta">
+                        {% if item.is_required %}
+                            Required
+                        {% else %}
+                            Optional
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="item-actions">
+                    <a
+                        href="{% url 'operations:checklist_item_edit' property.slug checklist.pk item.pk %}"
+                        class="secondary-button"
+                    >
+                        Edit
+                    </a>
+                    <form
+                        method="post"
+                        action="{% url 'operations:checklist_item_delete' property.slug checklist.pk item.pk %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="delete-button"
+                        >
+                            Delete
+                        </button>
+                    </form>
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                This checklist has no items yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.form-card {
+    max-width: 760px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 26px;
+}
+.form-group {
+    margin-bottom: 20px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 7px;
+    font-weight: 700;
+}
+.form-control {
+    width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 11px 12px;
+    font: inherit;
+}
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 9px 13px;
+    background: white;
+    font-size: 14px;
+    font-weight: 700;
+}
+.item-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.item-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 17px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+.item-actions {
+    display: flex;
+    gap: 8px;
+}
+.item-actions form {
+    margin: 0;
+}
+.delete-button {
+    border: 0;
+    border-radius: 8px;
+    padding: 9px 13px;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-weight: 700;
+    cursor: pointer;
+}
+.field-error {
+    margin-top: 5px;
+    color: #b91c1c;
+    font-size: 13px;
+}
+</style>
+{% endblock %}
