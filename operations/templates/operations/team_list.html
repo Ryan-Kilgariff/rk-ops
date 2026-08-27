@@ -1,0 +1,163 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Team
+{% endblock %}
+{% block topbar_title %}
+Team
+{% endblock %}
+{% block content %}
+<div class="section-header">
+    <div>
+        <p class="page-eyebrow">
+            Property
+        </p>
+        <h1 class="page-title">
+            Team
+        </h1>
+        <p class="page-subtitle">
+            Manage staff access for {{ property.name }}.
+        </p>
+    </div>
+    <a
+        href="{% url 'operations:team_member_create' property.slug %}"
+        class="button"
+    >
+        + Add Team Member
+    </a>
+</div>
+<section class="section">
+    <div class="team-list">
+        {% for membership in memberships %}
+            <article class="team-card">
+                <div class="member-avatar">
+                    {% if membership.user.first_name %}
+                        {{ membership.user.first_name|first|upper }}
+                    {% else %}
+                        {{ membership.user.username|first|upper }}
+                    {% endif %}
+                </div>
+                <div class="member-main">
+                    <h3>
+                        {% if membership.user.get_full_name %}
+                            {{ membership.user.get_full_name }}
+                        {% else %}
+                            {{ membership.user.username }}
+                        {% endif %}
+                    </h3>
+                    <div class="task-meta">
+                        {{ membership.get_role_display }}
+                        {% if membership.job_title %}
+                            · {{ membership.job_title }}
+                        {% endif %}
+                    </div>
+                    {% if membership.user.email %}
+                        <div class="task-meta">
+                            {{ membership.user.email }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="member-side">
+                    {% if membership.is_active %}
+                        <span class="active-badge">
+                            Active
+                        </span>
+                    {% else %}
+                        <span class="inactive-badge">
+                            Inactive
+                        </span>
+                    {% endif %}
+                    <a
+                        href="{% url 'operations:team_member_edit' property.slug membership.pk %}"
+                        class="secondary-button"
+                    >
+                        Edit
+                    </a>
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                No team members have been added yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.team-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.team-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+.member-avatar {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 46px;
+    border-radius: 50%;
+    background: #111827;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+}
+.member-main {
+    flex: 1;
+}
+.member-main h3 {
+    margin: 0 0 6px;
+}
+.member-side {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.active-badge,
+.inactive-badge {
+    border-radius: 999px;
+    padding: 5px 9px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.active-badge {
+    background: #ecfdf5;
+    color: #047857;
+}
+.inactive-badge {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: white;
+    font-size: 14px;
+    font-weight: 700;
+}
+@media (max-width: 650px) {
+    .team-card {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+    .member-side {
+        width: 100%;
+        padding-left: 64px;
+    }
+}
+</style>
+{% endblock %}

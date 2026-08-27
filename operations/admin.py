@@ -1,5 +1,13 @@
 from django.contrib import admin
-from .models import Issue, Task
+from .models import (
+    Checklist,
+    ChecklistCompletion,
+    ChecklistItem,
+    ChecklistRun,
+    HandoverNote,
+    Issue,
+    Task,
+)
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
     list_display = (
@@ -49,3 +57,44 @@ class IssueAdmin(admin.ModelAdmin):
         "property__name",
     )
     raw_id_fields = ("assigned_to",)
+class ChecklistItemInline(admin.TabularInline):
+    model = ChecklistItem
+    extra = 1
+@admin.register(Checklist)
+class ChecklistAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "property",
+        "is_active",
+        "created_at",
+    )
+    list_filter = (
+        "property",
+        "is_active",
+    )
+    search_fields = (
+        "name",
+        "description",
+    )
+    inlines = [
+        ChecklistItemInline,
+    ]
+@admin.register(ChecklistRun)
+class ChecklistRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "checklist",
+        "started_by",
+        "started_at",
+        "completed_at",
+    )
+    list_filter = (
+        "checklist",
+    )
+@admin.register(ChecklistCompletion)
+class ChecklistCompletionAdmin(admin.ModelAdmin):
+    list_display = (
+        "run",
+        "item",
+        "completed_by",
+        "completed_at",
+    )

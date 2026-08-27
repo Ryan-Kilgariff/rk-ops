@@ -1,0 +1,173 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | {{ run.checklist.name }}
+{% endblock %}
+{% block topbar_title %}
+Checklist
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Checklist
+</p>
+<h1 class="page-title">
+    {{ run.checklist.name }}
+</h1>
+<p class="page-subtitle">
+    Started {{ run.started_at|date:"d M Y · H:i" }}
+</p>
+<section class="section">
+    <div class="progress-card">
+        <div>
+            <strong>
+                Progress
+            </strong>
+        </div>
+        <div class="progress-number">
+            {{ completed_count }} / {{ total_items }}
+        </div>
+    </div>
+</section>
+<section class="section">
+    <div class="checklist-items">
+        {% for item in items %}
+            <article
+                class="
+                    checklist-item
+                    {% if item.id in completed_item_ids %}
+                        completed
+                    {% endif %}
+                "
+            >
+                <div>
+                    <strong>
+                        {{ item.title }}
+                    </strong>
+                    {% if item.description %}
+                        <div class="task-meta">
+                            {{ item.description }}
+                        </div>
+                    {% endif %}
+                    {% if item.is_required %}
+                        <div class="required-label">
+                            Required
+                        </div>
+                    {% endif %}
+                </div>
+                {% if not run.completed_at %}
+                    <form
+                        method="post"
+                        action="{% url 'operations:checklist_item_toggle' property.slug run.pk item.pk %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="check-button"
+                        >
+                            {% if item.id in completed_item_ids %}
+                                ✓ Done
+                            {% else %}
+                                Mark Done
+                            {% endif %}
+                        </button>
+                    </form>
+                {% else %}
+                    <span class="completed-label">
+                        ✓ Complete
+                    </span>
+                {% endif %}
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% if not run.completed_at %}
+    <section class="section">
+        <form
+            method="post"
+            action="{% url 'operations:checklist_complete' property.slug run.pk %}"
+        >
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="button"
+            >
+                Complete Checklist
+            </button>
+        </form>
+    </section>
+{% else %}
+    <section class="section">
+        <div class="completion-banner">
+            ✓ Checklist completed
+            {{ run.completed_at|date:"d M Y · H:i" }}
+        </div>
+    </section>
+{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.progress-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.progress-number {
+    font-size: 22px;
+    font-weight: 700;
+}
+.checklist-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.checklist-item {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    align-items: center;
+}
+.checklist-item.completed {
+    background: #f0fdf4;
+}
+.required-label {
+    display: inline-block;
+    margin-top: 7px;
+    color: #6b7280;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.check-button {
+    border: 1px solid #d1d5db;
+    background: white;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.completed .check-button {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+}
+.completed-label {
+    color: #047857;
+    font-weight: 700;
+}
+.completion-banner {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    border-radius: 10px;
+    padding: 18px;
+    font-weight: 700;
+}
+</style>
+{% endblock %}

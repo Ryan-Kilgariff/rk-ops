@@ -19,7 +19,7 @@ Handover
         </p>
     </div>
     <a
-        href="{% url 'operations:handover_create' %}"
+        href="{% url 'operations:handover_create' property.slug %}"
         class="button"
     >
         + Add Note
@@ -50,7 +50,7 @@ Handover
                 </div>
                 <form
                     method="post"
-                    action="{% url 'operations:handover_resolve' note.pk %}"
+                    action="{% url 'operations:handover_resolve' property.slug note.pk %}"
                 >
                     {% csrf_token %}
                     <button

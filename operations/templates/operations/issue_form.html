@@ -49,7 +49,7 @@ RK Ops | Issue
         {% endfor %}
         <div class="form-actions">
             <a
-                href="{% url 'operations:issue_list' %}"
+                href="{% url 'operations:issue_list' property.slug %}"
                 class="secondary-button"
             >
                 Cancel

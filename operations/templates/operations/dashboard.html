@@ -55,7 +55,7 @@ Dashboard
             Today's Tasks
         </h2>
         <a
-            href="{% url 'operations:task_create' %}"
+            href="{% url 'operations:task_create' property.slug %}"
             class="button"
         >
             + New Task
@@ -101,7 +101,7 @@ Dashboard
             Open Issues
         </h2>
         <a
-            href="{% url 'operations:issue_create' %}"
+            href="{% url 'operations:issue_create' property.slug %}"
             class="button"
         >
             + Report Issue

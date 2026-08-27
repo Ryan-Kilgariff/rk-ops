@@ -257,41 +257,43 @@
         </div>
         <nav class="nav">
             <a
-                href="{% url 'operations:dashboard' %}"
+                href="{% url 'operations:dashboard' property.slug %}"
                 class="nav-link {% if active_page == 'dashboard' %}active{% endif %}"
             >
                 Dashboard
             </a>
             <a
-                href="{% url 'operations:task_list' %}"
+                href="{% url 'operations:task_list' property.slug %}"
                 class="nav-link {% if active_page == 'tasks' %}active{% endif %}"
             >
                 Tasks
             </a>
             <a
-                href="{% url 'operations:issue_list' %}"
+                href="{% url 'operations:issue_list' property.slug %}"
                 class="nav-link {% if active_page == 'issues' %}active{% endif %}"
             >
                 Issues
             </a>
             <a
-                href="{% url 'operations:handover_list' %}"
+                href="{% url 'operations:handover_list' property.slug %}"
                 class="nav-link {% if active_page == 'handover' %}active{% endif %}"
             >
                 Handover
             </a>
             <a
-                href="#"
-                class="nav-link"
+                href="{% url 'operations:checklist_list' property.slug %}"
+                class="nav-link {% if active_page == 'checklists' %}active{% endif %}"
             >
                 Checklists
             </a>
-            <a
-                href="#"
-                class="nav-link"
-            >
-                Team
-            </a>
+            {% if can_manage_team %}
+                <a
+                    href="{% url 'operations:team_list' property.slug %}"
+                    class="nav-link {% if active_page == 'team' %}active{% endif %}"
+                >
+                    Team
+                </a>
+            {% endif %}    
             <a
                 href="#"
                 class="nav-link"
@@ -313,8 +315,26 @@
             <div class="user-area">
                 {% if request.user.is_authenticated %}
                     {{ request.user.username }}
-                {% else %}
-                    RK Ops
+                    ·
+                    <form
+                        method="post"
+                        action="{% url 'logout' %}"
+                        style="display: inline;"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            style="
+                                border: 0;
+                                background: none;
+                                padding: 0;
+                                color: #6b7280;
+                                cursor: pointer;
+                            "
+                        >
+                            Logout
+                        </button>
+                    </form>
                 {% endif %}
             </div>
         </header>

@@ -2,60 +2,109 @@ from django.urls import path
 from . import views
 app_name = "operations"
 urlpatterns = [
-    path("", views.dashboard, name="dashboard"),
     path(
-        "tasks/",
+        "",
+        views.property_home,
+        name="property_home",
+    ),
+    path(
+        "p/<slug:property_slug>/",
+        views.dashboard,
+        name="dashboard",
+    ),
+    path(
+        "p/<slug:property_slug>/tasks/",
         views.task_list,
         name="task_list",
     ),
     path(
-        "tasks/new/",
+        "p/<slug:property_slug>/tasks/new/",
         views.task_create,
         name="task_create",
     ),
     path(
-        "tasks/<int:pk>/edit/",
+        "p/<slug:property_slug>/tasks/<int:pk>/edit/",
         views.task_edit,
         name="task_edit",
     ),
     path(
-        "tasks/<int:pk>/complete/",
+        "p/<slug:property_slug>/tasks/<int:pk>/complete/",
         views.task_complete,
         name="task_complete",
     ),
     path(
-        "issues/",
+        "p/<slug:property_slug>/issues/",
         views.issue_list,
         name="issue_list",
     ),
     path(
-        "issues/new/",
+        "p/<slug:property_slug>/issues/new/",
         views.issue_create,
         name="issue_create",
     ),
     path(
-        "issues/<int:pk>/edit/",
+        "p/<slug:property_slug>/issues/<int:pk>/edit/",
         views.issue_edit,
         name="issue_edit",
     ),
     path(
-        "issues/<int:pk>/resolve/",
+        "p/<slug:property_slug>/issues/<int:pk>/resolve/",
         views.issue_resolve,
         name="issue_resolve",
     ),
     path(
-        "handover/",
+        "p/<slug:property_slug>/handover/",
         views.handover_list,
         name="handover_list",
     ),
     path(
-        "handover/new/",
+        "p/<slug:property_slug>/handover/new/",
         views.handover_create,
         name="handover_create",
     ),
     path(
-        "handover/<int:pk>/resolve/",
+        "p/<slug:property_slug>/handover/<int:pk>/resolve/",
         views.handover_resolve,
         name="handover_resolve",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/",
+        views.checklist_list,
+        name="checklist_list",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/<int:pk>/start/",
+        views.checklist_start,
+        name="checklist_start",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/run/<int:pk>/",
+        views.checklist_run,
+        name="checklist_run",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/run/<int:run_pk>/item/<int:item_pk>/",
+        views.checklist_item_toggle,
+        name="checklist_item_toggle",
+    ),
+    path(
+        "p/<slug:property_slug>/checklists/run/<int:pk>/complete/",
+        views.checklist_complete,
+        name="checklist_complete",
+    ),
+    path(
+        "p/<slug:property_slug>/team/",
+        views.team_list,
+        name="team_list",
+    ),
+    path(
+        "p/<slug:property_slug>/team/new/",
+        views.team_member_create,
+        name="team_member_create",
+    ),
+    path(
+        "p/<slug:property_slug>/team/<int:pk>/edit/",
+        views.team_member_edit,
+        name="team_member_edit",
     ),
 ]

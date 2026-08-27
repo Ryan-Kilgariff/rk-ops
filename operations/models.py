@@ -177,3 +177,85 @@ class HandoverNote(models.Model):
         ]
     def __str__(self):
         return self.note[:60]
+class Checklist(models.Model):
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="checklists",
+    )
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["name"]
+    def __str__(self):
+        return self.name
+class ChecklistItem(models.Model):
+    checklist = models.ForeignKey(
+        Checklist,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    order = models.PositiveIntegerField(default=0)
+    is_required = models.BooleanField(default=True)
+    class Meta:
+        ordering = ["order", "id"]
+    def __str__(self):
+        return self.title
+class ChecklistRun(models.Model):
+    checklist = models.ForeignKey(
+        Checklist,
+        on_delete=models.CASCADE,
+        related_name="runs",
+    )
+    started_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ops_checklist_runs",
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    class Meta:
+        ordering = ["-started_at"]
+    @property
+    def is_complete(self):
+        return self.completed_at is not None
+    def __str__(self):
+        return f"{self.checklist.name} - {self.started_at:%d %b %Y}"
+class ChecklistCompletion(models.Model):
+    run = models.ForeignKey(
+        ChecklistRun,
+        on_delete=models.CASCADE,
+        related_name="completions",
+    )
+    item = models.ForeignKey(
+        ChecklistItem,
+        on_delete=models.CASCADE,
+        related_name="completions",
+    )
+    completed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ops_checklist_completions",
+    )
+    completed_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["run", "item"],
+                name="unique_checklist_run_item_completion",
+            )
+        ]
+    def __str__(self):
+        return f"{self.run} - {self.item.title}"

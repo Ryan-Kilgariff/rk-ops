@@ -19,7 +19,7 @@ Issues
         </p>
     </div>
     <a
-        href="{% url 'operations:issue_create' %}"
+        href="{% url 'operations:issue_create' property.slug %}"
         class="button"
     >
         + Report Issue
@@ -63,7 +63,7 @@ Issues
             Filter
         </button>
         <a
-            href="{% url 'operations:issue_list' %}"
+            href="{% url 'operations:issue_list' property.slug %}"
             class="clear-filter"
         >
             Clear
@@ -98,16 +98,18 @@ Issues
                         </p>
                     {% endif %}
                     <div class="task-actions">
-                        <a
-                            href="{% url 'operations:issue_edit' issue.pk %}"
-                            class="secondary-button small-button"
-                        >
-                            Edit
-                        </a>
+                        {% if can_supervise %}
+                            <a
+                                href="{% url 'operations:issue_edit' property.slug issue.pk %}"
+                                class="secondary-button small-button"
+                            >
+                                Edit
+                            </a>
+                        {% endif %}
                         {% if issue.status != "resolved" %}
                             <form
                                 method="post"
-                                action="{% url 'operations:issue_resolve' issue.pk %}"
+                                action="{% url 'operations:issue_resolve' property.slug issue.pk %}"
                             >
                                 {% csrf_token %}
                                 <button

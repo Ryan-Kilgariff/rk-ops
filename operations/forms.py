@@ -1,6 +1,9 @@
 from django import forms
 from .models import Task
 from .models import HandoverNote, Issue, Task
+from django.contrib.auth import get_user_model
+from accounts.models import PropertyMembership
+User = get_user_model()
 class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
@@ -46,6 +49,29 @@ class TaskForm(forms.ModelForm):
                 attrs={"class": "form-control"}
             ),
         }
+        def __init__(self, *args, property_obj=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            if property_obj is not None:
+                allowed_user_ids = (
+                    PropertyMembership.objects
+                    .filter(
+                        property=property_obj,
+                        is_active=True,
+                    )
+                    .values_list(
+                        "user_id",
+                        flat=True,
+                    )
+                )
+                self.fields["assigned_to"].queryset = (
+                    User.objects
+                    .filter(id__in=allowed_user_ids)
+                    .order_by(
+                        "first_name",
+                        "last_name",
+                        "username",
+                    )
+                )
 class IssueForm(forms.ModelForm):
     class Meta:
         model = Issue
@@ -99,6 +125,29 @@ class IssueForm(forms.ModelForm):
                 }
             ),
         }
+        def __init__(self, *args, property_obj=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            if property_obj is not None:
+                allowed_user_ids = (
+                    PropertyMembership.objects
+                    .filter(
+                        property=property_obj,
+                        is_active=True,
+                    )
+                    .values_list(
+                        "user_id",
+                        flat=True,
+                    )
+                )
+                self.fields["assigned_to"].queryset = (
+                    User.objects
+                    .filter(id__in=allowed_user_ids)
+                    .order_by(
+                        "first_name",
+                        "last_name",
+                        "username",
+                    )
+                )
 class HandoverNoteForm(forms.ModelForm):
     class Meta:
         model = HandoverNote

@@ -36,7 +36,7 @@ New Handover Note
         {% endfor %}
         <div class="form-actions">
             <a
-                href="{% url 'operations:handover_list' %}"
+                href="{% url 'operations:handover_list' property.slug %}"
                 class="secondary-button"
             >
                 Cancel

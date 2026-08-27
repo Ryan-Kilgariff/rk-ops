@@ -19,7 +19,7 @@ Tasks
         </p>
     </div>
     <a
-        href="{% url 'operations:task_create' %}"
+        href="{% url 'operations:task_create' property.slug %}"
         class="button"
     >
         + New Task
@@ -83,7 +83,7 @@ Tasks
             Filter
         </button>
         <a
-            href="{% url 'operations:task_list' %}"
+            href="{% url 'operations:task_list' property.slug %}"
             class="clear-filter"
         >
             Clear
@@ -115,16 +115,18 @@ Tasks
                         </p>
                     {% endif %}
                     <div class="task-actions">
-                        <a
-                            href="{% url 'operations:task_edit' task.pk %}"
-                            class="secondary-button small-button"
-                        >
-                            Edit
-                        </a>
+                        {% if can_supervise %}
+                            <a
+                                href="{% url 'operations:task_edit' property.slug task.pk %}"
+                                class="secondary-button small-button"
+                            >
+                                Edit
+                            </a>
+                        {% endif %}
                         {% if task.status != "completed" %}
                             <form
                                 method="post"
-                                action="{% url 'operations:task_complete' task.pk %}"
+                                action="{% url 'operations:task_complete' property.slug task.pk %}"
                             >
                                 {% csrf_token %}
                                 <button

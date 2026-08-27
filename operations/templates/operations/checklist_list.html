@@ -1,0 +1,151 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Checklists
+{% endblock %}
+{% block topbar_title %}
+Checklists
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Operations
+</p>
+<h1 class="page-title">
+    Checklists
+</h1>
+<p class="page-subtitle">
+    Run repeatable operational procedures at {{ property.name }}.
+</p>
+<section class="section">
+    <h2 class="section-title">
+        Available Checklists
+    </h2>
+    <div class="checklist-grid">
+        {% for checklist in checklists %}
+            <article class="checklist-card">
+                <div>
+                    <h3>
+                        {{ checklist.name }}
+                    </h3>
+                    {% if checklist.description %}
+                        <p>
+                            {{ checklist.description }}
+                        </p>
+                    {% endif %}
+                    <div class="task-meta">
+                        {{ checklist.items.count }} items
+                    </div>
+                </div>
+                <form
+                    method="post"
+                    action="{% url 'operations:checklist_start' property.slug checklist.pk %}"
+                >
+                    {% csrf_token %}
+                    <button
+                        type="submit"
+                        class="button"
+                    >
+                        Start Checklist
+                    </button>
+                </form>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                No active checklists yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+<section class="section">
+    <h2 class="section-title">
+        Recent Runs
+    </h2>
+    <div class="recent-runs">
+        {% for run in recent_runs %}
+            <a
+                href="{% url 'operations:checklist_run' property.slug run.pk %}"
+                class="run-card"
+            >
+                <div>
+                    <strong>
+                        {{ run.checklist.name }}
+                    </strong>
+                    <div class="task-meta">
+                        {{ run.started_at|date:"d M Y · H:i" }}
+                    </div>
+                </div>
+                <div>
+                    {% if run.completed_at %}
+                        <span class="run-complete">
+                            Completed
+                        </span>
+                    {% else %}
+                        <span class="run-open">
+                            In Progress
+                        </span>
+                    {% endif %}
+                </div>
+            </a>
+        {% empty %}
+            <div class="empty-state">
+                No checklist runs yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.checklist-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 15px;
+}
+.checklist-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 24px;
+}
+.checklist-card h3 {
+    margin: 0 0 8px;
+}
+.checklist-card p {
+    color: #6b7280;
+    line-height: 1.5;
+}
+.recent-runs {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.run-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.run-complete {
+    color: #047857;
+    font-weight: 700;
+}
+.run-open {
+    color: #b45309;
+    font-weight: 700;
+}
+@media (max-width: 700px) {
+    .checklist-grid {
+        grid-template-columns: 1fr;
+    }
+
+}
+</style>
+{% endblock %}

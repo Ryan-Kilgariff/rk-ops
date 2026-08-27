@@ -5,12 +5,31 @@ from .models import Task
 from django.shortcuts import get_object_or_404, redirect, render
 from .forms import TaskForm
 from .forms import HandoverNoteForm, IssueForm, TaskForm
-from .models import HandoverNote, Issue, Task
-def dashboard(request):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+from .models import (
+    Checklist,
+    ChecklistCompletion,
+    ChecklistRun,
+    ChecklistItem,
+    HandoverNote,
+    Issue,
+    Task,
+)
+from accounts.forms import (
+    MembershipEditForm,
+    TeamMemberCreateForm,
+)
+from accounts.models import PropertyMembership
+from django.contrib.auth.decorators import login_required
+from .utils import (
+    get_property_for_user,
+    require_management_access,
+    require_supervisory_access,
+)
+@login_required
+def dashboard(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     now = timezone.now()
     today = timezone.localdate()
@@ -69,11 +88,45 @@ def dashboard(request):
         "operations/dashboard.html",
         context,
     )
-def task_list(request):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def property_home(request):
+    if request.user.is_superuser:
+        property_obj = (
+            Property.objects
+            .filter(is_active=True)
+            .order_by("name")
+            .first()
+        )
+    else:
+        membership = (
+            PropertyMembership.objects
+            .filter(
+                user=request.user,
+                is_active=True,
+                property__is_active=True,
+            )
+            .select_related("property")
+            .order_by("property__name")
+            .first()
+        )
+        property_obj = (
+            membership.property
+            if membership
+            else None
+        )
+    if not property_obj:
+        raise PermissionDenied(
+            "You do not have access to an active property."
+        )
+    return redirect(
+        "operations:dashboard",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def task_list(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     tasks = (
         Task.objects
@@ -96,26 +149,33 @@ def task_list(request):
         "priority_choices": Task.Priority.choices,
         "active_page": "tasks",
     }
-    return render(
-        request,
-        "operations/task_list.html",
-        context,
+    return redirect(
+        "operations:task_list",
+        property_slug=property_obj.slug,
     )
-def task_create(request):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def task_create(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     if request.method == "POST":
-        form = TaskForm(request.POST)
+        form = TaskForm(
+            request.POST,
+            property_obj=property_obj,
+        )
         if form.is_valid():
             task = form.save(commit=False)
             task.property = property_obj
             task.save()
-            return redirect("operations:task_list")
+            return redirect(
+                "operations:task_list",
+                property_slug=property_obj.slug,
+            )
     else:
-        form = TaskForm()
+        form = TaskForm(
+            property_obj=property_obj,
+        )
     context = {
         "property": property_obj,
         "form": form,
@@ -126,11 +186,11 @@ def task_create(request):
         "operations/task_form.html",
         context,
     )
-def task_edit(request, pk):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def task_edit(request, property_slug, pk):
+    property_obj = require_supervisory_access(
+        request.user,
+        property_slug,
     )
     task = get_object_or_404(
         Task,
@@ -141,6 +201,7 @@ def task_edit(request, pk):
         form = TaskForm(
             request.POST,
             instance=task,
+            property_obj=property_obj,
         )
         if form.is_valid():
             updated_task = form.save(commit=False)
@@ -152,9 +213,15 @@ def task_edit(request, pk):
             elif updated_task.status != Task.Status.COMPLETED:
                 updated_task.completed_at = None
             updated_task.save()
-            return redirect("operations:task_list")
+            return redirect(
+                "operations:task_list",
+                property_slug=property_obj.slug,
+            )
     else:
-        form = TaskForm(instance=task)
+        form = TaskForm(
+            instance=task,
+            property_obj=property_obj,
+        )
     context = {
         "property": property_obj,
         "task": task,
@@ -167,11 +234,11 @@ def task_edit(request, pk):
         "operations/task_form.html",
         context,
     )
-def task_complete(request, pk):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def task_complete(request, property_slug, pk):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     task = get_object_or_404(
         Task,
@@ -188,29 +255,27 @@ def task_complete(request, pk):
                 "updated_at",
             ]
         )
-    return redirect("operations:task_list")
-def issue_list(request):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+    return redirect(
+        "operations:task_list",
+        property_slug=property_obj.slug,
     )
-
+@login_required
+def issue_list(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
+    )
     issues = (
         Issue.objects
         .filter(property=property_obj)
         .select_related("assigned_to")
     )
-
     status_filter = request.GET.get("status")
     priority_filter = request.GET.get("priority")
-
     if status_filter:
         issues = issues.filter(status=status_filter)
-
     if priority_filter:
         issues = issues.filter(priority=priority_filter)
-
     context = {
         "property": property_obj,
         "issues": issues,
@@ -220,27 +285,34 @@ def issue_list(request):
         "priority_choices": Issue.Priority.choices,
         "active_page": "issues",
     }
-
     return render(
         request,
         "operations/issue_list.html",
         context,
     )
-def issue_create(request):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def issue_create(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     if request.method == "POST":
-        form = IssueForm(request.POST)
+        form = IssueForm(
+            request.POST,
+            property_obj=property_obj,
+        )
         if form.is_valid():
             issue = form.save(commit=False)
             issue.property = property_obj
             issue.save()
-            return redirect("operations:issue_list")
+            return redirect(
+                "operations:issue_list",
+                property_slug=property_obj.slug,
+            )
     else:
-        form = IssueForm()
+        form = IssueForm(
+            property_obj=property_obj,
+        )
     context = {
         "property": property_obj,
         "form": form,
@@ -251,11 +323,11 @@ def issue_create(request):
         "operations/issue_form.html",
         context,
     )
-def issue_edit(request, pk):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def issue_edit(request, property_slug, pk):
+    property_obj = require_supervisory_access(
+        request.user,
+        property_slug,
     )
     issue = get_object_or_404(
         Issue,
@@ -266,6 +338,7 @@ def issue_edit(request, pk):
         form = IssueForm(
             request.POST,
             instance=issue,
+            property_obj=property_obj,
         )
         if form.is_valid():
             updated_issue = form.save(commit=False)
@@ -277,9 +350,15 @@ def issue_edit(request, pk):
             elif updated_issue.status != Issue.Status.RESOLVED:
                 updated_issue.resolved_at = None
             updated_issue.save()
-            return redirect("operations:issue_list")
+            return redirect(
+                "operations:issue_list",
+                property_slug=property_obj.slug,
+            )
     else:
-        form = IssueForm(instance=issue)
+        form = IssueForm(
+            instance=issue,
+            property_obj=property_obj,
+        )
     context = {
         "property": property_obj,
         "issue": issue,
@@ -292,11 +371,11 @@ def issue_edit(request, pk):
         "operations/issue_form.html",
         context,
     )
-def issue_resolve(request, pk):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def issue_resolve(request, property_slug, pk):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     issue = get_object_or_404(
         Issue,
@@ -313,12 +392,15 @@ def issue_resolve(request, pk):
                 "updated_at",
             ]
         )
-    return redirect("operations:issue_list")
-def handover_list(request):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+    return redirect(
+        "operations:issue_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def handover_list(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     notes = (
         HandoverNote.objects
@@ -354,11 +436,11 @@ def handover_list(request):
         "operations/handover_list.html",
         context,
     )
-def handover_create(request):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def handover_create(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     if request.method == "POST":
         form = HandoverNoteForm(request.POST)
@@ -369,7 +451,8 @@ def handover_create(request):
                 note.author = request.user
             note.save()
             return redirect(
-                "operations:handover_list"
+                "operations:handover_list",
+                property_slug=property_obj.slug,
             )
     else:
         form = HandoverNoteForm()
@@ -383,11 +466,11 @@ def handover_create(request):
         "operations/handover_form.html",
         context,
     )
-def handover_resolve(request, pk):
-    property_obj = get_object_or_404(
-        Property,
-        slug="willowmere-house",
-        is_active=True,
+@login_required
+def handover_resolve(request, property_slug, pk):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
     )
     note = get_object_or_404(
         HandoverNote,
@@ -404,5 +487,277 @@ def handover_resolve(request, pk):
             ]
         )
     return redirect(
-        "operations:handover_list"
+        "operations:handover_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def checklist_list(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
+    )
+    checklists = (
+        Checklist.objects
+        .filter(
+            property=property_obj,
+            is_active=True,
+        )
+        .prefetch_related("items")
+    )
+    recent_runs = (
+        ChecklistRun.objects
+        .filter(
+            checklist__property=property_obj,
+        )
+        .select_related(
+            "checklist",
+            "started_by",
+        )[:10]
+    )
+    context = {
+        "property": property_obj,
+        "checklists": checklists,
+        "recent_runs": recent_runs,
+        "active_page": "checklists",
+    }
+    return render(
+        request,
+        "operations/checklist_list.html",
+        context,
+    )
+@login_required
+def checklist_start(request, property_slug, pk):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
+    )
+    checklist = get_object_or_404(
+        Checklist,
+        pk=pk,
+        property=property_obj,
+        is_active=True,
+    )
+    if request.method == "POST":
+        run = ChecklistRun.objects.create(
+            checklist=checklist,
+            started_by=(
+                request.user
+                if request.user.is_authenticated
+                else None
+            ),
+        )
+        return redirect(
+            "operations:checklist_run",
+            property_slug=property_obj.slug,
+            pk=run.pk,
+        )
+    return redirect(
+        "operations:checklist_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def checklist_run(request, property_slug, pk):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
+    )
+    run = get_object_or_404(
+        ChecklistRun.objects.select_related(
+            "checklist",
+        ),
+        pk=pk,
+        checklist__property=property_obj,
+    )
+    items = run.checklist.items.all()
+    completed_item_ids = set(
+        run.completions.values_list(
+            "item_id",
+            flat=True,
+        )
+    )
+    total_items = items.count()
+    completed_count = len(completed_item_ids)
+    context = {
+        "property": property_obj,
+        "run": run,
+        "items": items,
+        "completed_item_ids": completed_item_ids,
+        "total_items": total_items,
+        "completed_count": completed_count,
+        "active_page": "checklists",
+    }
+    return render(
+        request,
+        "operations/checklist_run.html",
+        context,
+    )
+@login_required
+def checklist_item_toggle(request, property_slug, run_pk, item_pk):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
+    )
+    run = get_object_or_404(
+        ChecklistRun,
+        pk=run_pk,
+        checklist__property=property_obj,
+    )
+    item = get_object_or_404(
+        ChecklistItem,
+        pk=item_pk,
+        checklist=run.checklist,
+    )
+    if request.method == "POST":
+        completion = ChecklistCompletion.objects.filter(
+            run=run,
+            item=item,
+        ).first()
+        if completion:
+            completion.delete()
+        else:
+            ChecklistCompletion.objects.create(
+                run=run,
+                item=item,
+                completed_by=(
+                    request.user
+                    if request.user.is_authenticated
+                    else None
+                ),
+            )
+    return redirect(
+        "operations:checklist_run",
+        property_slug=property_obj.slug,
+        pk=run.pk,
+    )
+@login_required
+def checklist_complete(request, property_slug, pk):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug
+    )
+    run = get_object_or_404(
+        ChecklistRun,
+        pk=pk,
+        checklist__property=property_obj,
+    )
+    if request.method == "POST":
+        required_items = run.checklist.items.filter(
+            is_required=True,
+        )
+        required_ids = set(
+            required_items.values_list(
+                "id",
+                flat=True,
+            )
+        )
+        completed_ids = set(
+            run.completions.values_list(
+                "item_id",
+                flat=True,
+            )
+        )
+        if required_ids.issubset(completed_ids):
+            run.completed_at = timezone.now()
+            run.save(
+                update_fields=[
+                    "completed_at",
+                ]
+            )
+    return redirect(
+        "operations:checklist_run",
+        property_slug=property_obj.slug,
+        pk=run.pk,
+    )
+@login_required
+def team_list(request, property_slug):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    memberships = (
+        PropertyMembership.objects
+        .filter(property=property_obj)
+        .select_related("user")
+    )
+    context = {
+        "property": property_obj,
+        "memberships": memberships,
+        "active_page": "team",
+    }
+    return render(
+        request,
+        "operations/team_list.html",
+        context,
+    )
+@login_required
+def team_member_create(request, property_slug):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    if request.method == "POST":
+        form = TeamMemberCreateForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            PropertyMembership.objects.create(
+                property=property_obj,
+                user=user,
+                role=form.cleaned_data["role"],
+                job_title=form.cleaned_data["job_title"],
+            )
+            return redirect(
+                "operations:team_list",
+                property_slug=property_obj.slug,
+            )
+    else:
+        form = TeamMemberCreateForm()
+    context = {
+        "property": property_obj,
+        "form": form,
+        "active_page": "team",
+    }
+    return render(
+        request,
+        "operations/team_form.html",
+        context,
+    )
+@login_required
+def team_member_edit(request, property_slug, pk):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    membership = get_object_or_404(
+        PropertyMembership.objects.select_related(
+            "user",
+        ),
+        pk=pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        form = MembershipEditForm(
+            request.POST,
+            instance=membership,
+        )
+        if form.is_valid():
+            form.save()
+            return redirect(
+                "operations:team_list",
+                property_slug=property_obj.slug,
+            )
+    else:
+        form = MembershipEditForm(
+            instance=membership,
+        )
+    context = {
+        "property": property_obj,
+        "membership": membership,
+        "form": form,
+        "active_page": "team",
+        "form_mode": "edit",
+    }
+    return render(
+        request,
+        "operations/team_form.html",
+        context,
     )
