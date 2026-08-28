@@ -18,12 +18,22 @@ Tasks
             Manage operational work across {{ property.name }}.
         </p>
     </div>
-    <a
-        href="{% url 'operations:task_create' property.slug %}"
-        class="button"
-    >
-        + New Task
-    </a>
+    <div class="task-header-actions">
+        <a
+            href="{% url 'operations:task_create' property.slug %}"
+            class="button"
+        >
+            + New Task
+        </a>
+        {% if can_manage_team %}
+            <a
+                href="{% url 'operations:recurring_task_list' property.slug %}"
+                class="button secondary-action"
+            >
+                Recurring Tasks
+            </a>
+        {% endif %}
+    </div>
 </div>
 <section class="section">
     <form
@@ -294,5 +304,18 @@ Tasks
     .due-date {
         margin-top: 8px;
     }
+.task-header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+.secondary-action {
+    background: white;
+    color: #111827;
+    border: 1px solid #d1d5db;
+}
+.secondary-action:hover {
+    background: #f9fafb;
+}
 </style>
 {% endblock %}

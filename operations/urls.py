@@ -137,4 +137,40 @@ urlpatterns = [
         views.checklist_item_delete,
         name="checklist_item_delete",
     ),
+    path(
+        "p/<slug:property_slug>/checklists/manage/"
+        "<int:checklist_pk>/items/reorder/",
+        views.checklist_item_reorder,
+        name="checklist_item_reorder",
+    ),
+    path(
+        "p/<slug:property_slug>/tasks/recurring/",
+        views.recurring_task_list,
+        name="recurring_task_list",
+    ),
+    path(
+        "p/<slug:property_slug>/tasks/recurring/new/",
+        views.recurring_task_create,
+        name="recurring_task_create",
+    ),
+    path(
+        "p/<slug:property_slug>/tasks/recurring/generate/",
+        views.recurring_task_generate_today,
+        name="recurring_task_generate_today",
+    ),
+    path(
+        "p/<slug:property_slug>/tasks/recurring/<int:pk>/edit/",
+        views.recurring_task_edit,
+        name="recurring_task_edit",
+    ),
+    path(
+        "p/<slug:property_slug>/tasks/recurring/<int:pk>/toggle/",
+        views.recurring_task_toggle,
+        name="recurring_task_toggle",
+    ),
+    path(
+        "p/<slug:property_slug>/tasks/recurring/<int:pk>/delete/",
+        views.recurring_task_delete,
+        name="recurring_task_delete",
+    ),
 ]

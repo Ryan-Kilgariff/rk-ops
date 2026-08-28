@@ -4,6 +4,7 @@ from .models import (
     ChecklistItem,
     HandoverNote,
     Issue,
+    RecurringTask,
     Task,
 )
 from django.contrib.auth import get_user_model
@@ -232,3 +233,89 @@ class ChecklistItemForm(forms.ModelForm):
                 }
             ),
         }
+class RecurringTaskForm(forms.ModelForm):
+    class Meta:
+        model = RecurringTask
+        fields = [
+            "title",
+            "description",
+            "category",
+            "priority",
+            "assigned_to",
+            "frequency",
+            "weekday",
+            "due_time",
+            "is_active",
+        ]
+        widgets = {
+            "title": forms.TextInput(
+                attrs={"class": "form-control"}
+            ),
+            "description": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                }
+            ),
+            "category": forms.Select(
+                attrs={"class": "form-control"}
+            ),
+            "priority": forms.Select(
+                attrs={"class": "form-control"}
+            ),
+            "assigned_to": forms.Select(
+                attrs={"class": "form-control"}
+            ),
+            "frequency": forms.Select(
+                attrs={"class": "form-control"}
+            ),
+            "weekday": forms.Select(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+            "due_time": forms.TimeInput(
+                attrs={
+                    "class": "form-control",
+                    "type": "time",
+                }
+            ),
+        }
+    def __init__(self, *args, property_obj=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if property_obj is not None:
+            allowed_user_ids = (
+                PropertyMembership.objects
+                .filter(
+                    property=property_obj,
+                    is_active=True,
+                )
+                .values_list(
+                    "user_id",
+                    flat=True,
+                )
+            )
+            self.fields["assigned_to"].queryset = (
+                User.objects
+                .filter(id__in=allowed_user_ids)
+                .order_by(
+                    "first_name",
+                    "last_name",
+                    "username",
+                )
+            )
+    def clean(self):
+        cleaned_data = super().clean()
+        frequency = cleaned_data.get("frequency")
+        weekday = cleaned_data.get("weekday")
+        if (
+            frequency == RecurringTask.Frequency.WEEKLY
+            and weekday is None
+        ):
+            self.add_error(
+                "weekday",
+                "Choose a weekday for weekly tasks.",
+            )
+        if frequency == RecurringTask.Frequency.DAILY:
+            cleaned_data["weekday"] = None
+        return cleaned_data

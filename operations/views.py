@@ -2,6 +2,9 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.http import JsonResponse
+from django.views.decorators.http import require_POST
+import json
 from accounts.forms import (
     MembershipEditForm,
     TeamMemberCreateForm,
@@ -14,6 +17,7 @@ from .forms import (
     HandoverNoteForm,
     IssueForm,
     TaskForm,
+    RecurringTaskForm,
 )
 from .models import (
     Checklist,
@@ -23,12 +27,14 @@ from .models import (
     HandoverNote,
     Issue,
     Task,
+    RecurringTask
 )
 from .utils import (
     get_property_for_user,
     require_management_access,
     require_supervisory_access,
 )
+from datetime import datetime
 @login_required
 def dashboard(request, property_slug):
     property_obj, membership = get_property_for_user(
@@ -972,4 +978,238 @@ def checklist_item_delete(
         "operations:checklist_edit",
         property_slug=property_obj.slug,
         pk=checklist.pk,
+    )
+@login_required
+@require_POST
+def checklist_item_reorder(request, property_slug, checklist_pk):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    checklist = get_object_or_404(
+        Checklist,
+        pk=checklist_pk,
+        property=property_obj,
+    )
+    try:
+        data = json.loads(request.body)
+        item_ids = data.get("item_ids", [])
+    except json.JSONDecodeError:
+        return JsonResponse(
+            {"success": False, "error": "Invalid JSON"},
+            status=400,
+        )
+    valid_items = {
+        item.id: item
+        for item in checklist.items.filter(
+            id__in=item_ids,
+        )
+    }
+    if len(valid_items) != len(item_ids):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Invalid checklist item.",
+            },
+            status=400,
+        )
+    for index, item_id in enumerate(
+        item_ids,
+        start=1,
+    ):
+        item = valid_items[item_id]
+        item.order = index * 10
+        item.save(update_fields=["order"])
+    return JsonResponse(
+        {"success": True}
+    )
+@login_required
+def recurring_task_list(request, property_slug):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    recurring_tasks = (
+        RecurringTask.objects
+        .filter(property=property_obj)
+        .select_related("assigned_to")
+    )
+    context = {
+        "property": property_obj,
+        "recurring_tasks": recurring_tasks,
+        "active_page": "tasks",
+    }
+    return render(
+        request,
+        "operations/recurring_task_list.html",
+        context,
+    )
+@login_required
+def recurring_task_create(request, property_slug):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    if request.method == "POST":
+        form = RecurringTaskForm(
+            request.POST,
+            property_obj=property_obj,
+        )
+        if form.is_valid():
+            recurring_task = form.save(commit=False)
+            recurring_task.property = property_obj
+            recurring_task.save()
+            return redirect(
+                "operations:recurring_task_list",
+                property_slug=property_obj.slug,
+            )
+    else:
+        form = RecurringTaskForm(
+            property_obj=property_obj,
+        )
+    context = {
+        "property": property_obj,
+        "form": form,
+        "active_page": "tasks",
+    }
+    return render(
+        request,
+        "operations/recurring_task_form.html",
+        context,
+    )
+@login_required
+def recurring_task_generate_today(request, property_slug):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    if request.method == "POST":
+        today = timezone.localdate()
+        recurring_tasks = RecurringTask.objects.filter(
+            property=property_obj,
+            is_active=True,
+        )
+        for recurring in recurring_tasks:
+            should_generate = False
+            if recurring.frequency == RecurringTask.Frequency.DAILY:
+                should_generate = True
+            elif (
+                recurring.frequency == RecurringTask.Frequency.WEEKLY
+                and recurring.weekday == today.weekday()
+            ):
+                should_generate = True
+            if not should_generate:
+                continue
+            due_at = None
+            if recurring.due_time:
+                naive_due = datetime.combine(
+                    today,
+                    recurring.due_time,
+                )
+                due_at = timezone.make_aware(
+                    naive_due,
+                    timezone.get_current_timezone(),
+                )
+            already_exists = Task.objects.filter(
+                property=property_obj,
+                recurring_source=recurring,
+                scheduled_date=today,
+            ).exists()
+            if already_exists:
+                continue
+            Task.objects.create(
+                property=property_obj,
+                recurring_source=recurring,
+                scheduled_date=today,
+                title=recurring.title,
+                description=recurring.description,
+                category=recurring.category,
+                priority=recurring.priority,
+                assigned_to=recurring.assigned_to,
+                due_at=due_at,
+                status=Task.Status.OPEN,
+            )
+    return redirect(
+        "operations:task_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def recurring_task_edit(request, property_slug, pk):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    recurring_task = get_object_or_404(
+        RecurringTask,
+        pk=pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        form = RecurringTaskForm(
+            request.POST,
+            instance=recurring_task,
+            property_obj=property_obj,
+        )
+        if form.is_valid():
+            form.save()
+            return redirect(
+                "operations:recurring_task_list",
+                property_slug=property_obj.slug,
+            )
+    else:
+        form = RecurringTaskForm(
+            instance=recurring_task,
+            property_obj=property_obj,
+        )
+    context = {
+        "property": property_obj,
+        "form": form,
+        "recurring_task": recurring_task,
+        "active_page": "tasks",
+        "form_mode": "edit",
+    }
+    return render(
+        request,
+        "operations/recurring_task_form.html",
+        context,
+    )
+@login_required
+def recurring_task_toggle(request, property_slug, pk):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    recurring_task = get_object_or_404(
+        RecurringTask,
+        pk=pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        recurring_task.is_active = not recurring_task.is_active
+        recurring_task.save(
+            update_fields=[
+                "is_active",
+                "updated_at",
+            ]
+        )
+    return redirect(
+        "operations:recurring_task_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def recurring_task_delete(request, property_slug, pk):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    recurring_task = get_object_or_404(
+        RecurringTask,
+        pk=pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        recurring_task.delete()
+    return redirect(
+        "operations:recurring_task_list",
+        property_slug=property_obj.slug,
     )

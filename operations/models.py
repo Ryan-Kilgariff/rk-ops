@@ -56,6 +56,17 @@ class Task(models.Model):
         null=True,
         blank=True,
     )
+    recurring_source = models.ForeignKey(
+        "RecurringTask",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_tasks",
+    )
+    scheduled_date = models.DateField(
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
@@ -259,3 +270,60 @@ class ChecklistCompletion(models.Model):
         ]
     def __str__(self):
         return f"{self.run} - {self.item.title}"
+class RecurringTask(models.Model):
+    class Frequency(models.TextChoices):
+        DAILY = "daily", "Daily"
+        WEEKLY = "weekly", "Weekly"
+    class Weekday(models.IntegerChoices):
+        MONDAY = 0, "Monday"
+        TUESDAY = 1, "Tuesday"
+        WEDNESDAY = 2, "Wednesday"
+        THURSDAY = 3, "Thursday"
+        FRIDAY = 4, "Friday"
+        SATURDAY = 5, "Saturday"
+        SUNDAY = 6, "Sunday"
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="recurring_tasks",
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    category = models.CharField(
+        max_length=30,
+        choices=Task.Category.choices,
+        default=Task.Category.OTHER,
+    )
+    priority = models.CharField(
+        max_length=20,
+        choices=Task.Priority.choices,
+        default=Task.Priority.MEDIUM,
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_recurring_ops_tasks",
+    )
+    frequency = models.CharField(
+        max_length=20,
+        choices=Frequency.choices,
+        default=Frequency.DAILY,
+    )
+    weekday = models.PositiveSmallIntegerField(
+        choices=Weekday.choices,
+        null=True,
+        blank=True,
+    )
+    due_time = models.TimeField(
+        null=True,
+        blank=True,
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ["title"]
+    def __str__(self):
+        return self.title

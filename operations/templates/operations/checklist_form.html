@@ -64,26 +64,37 @@ Checklist Template
             + Add Item
         </a>
     </div>
-    <div class="item-list">
+    <div
+        class="item-list"
+        id="checklist-items"
+        data-reorder-url="{% url 'operations:checklist_item_reorder' property.slug checklist.pk %}"
+    >
         {% for item in items %}
-            <article class="item-card">
-                <div>
+            <article
+                class="item-card"
+                data-item-id="{{ item.id }}"
+            >
+                <div
+                    class="drag-handle"
+                    title="Drag to reorder"
+                >
+                    ⋮⋮
+                </div>
                     <strong>
-                        {{ item.order }} · {{ item.title }}
+                        {{ item.title }}
                     </strong>
                     {% if item.description %}
                         <div class="task-meta">
                             {{ item.description }}
                         </div>
                     {% endif %}
-                    <div class="task-meta">
+                    <div class="item-requirement">
                         {% if item.is_required %}
                             Required
                         {% else %}
                             Optional
                         {% endif %}
                     </div>
-                </div>
                 <div class="item-actions">
                     <a
                         href="{% url 'operations:checklist_item_edit' property.slug checklist.pk item.pk %}"
@@ -163,15 +174,20 @@ Checklist Template
     background: white;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
-    padding: 17px 18px;
-    display: flex;
-    justify-content: space-between;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns:
+        40px
+        minmax(0, 1fr)
+        140px
+        auto;
     align-items: center;
-    gap: 20px;
+    gap: 18px;
 }
 .item-actions {
     display: flex;
     gap: 8px;
+    justify-content: flex-end;
 }
 .item-actions form {
     margin: 0;
@@ -190,5 +206,103 @@ Checklist Template
     color: #b91c1c;
     font-size: 13px;
 }
+.drag-handle {
+    flex: 0 0 auto;
+    padding: 8px 6px;
+    color: #9ca3af;
+    font-size: 20px;
+    font-weight: 700;
+    cursor: grab;
+    user-select: none;
+}
+.drag-handle:active {
+    cursor: grabbing;
+}
+.item-content {
+    min-width: 0;
+}
+.item-card.dragging {
+    opacity: 0.55;
+}
+.item-card.sortable-ghost {
+    background: #f9fafb;
+    border-style: dashed;
+}
+.item-requirement {
+    color: #6b7280;
+    font-size: 14px;
+}
+@media (max-width: 700px) {
+    .item-card {
+        grid-template-columns: 32px 1fr;
+    }
+    .item-requirement {
+        grid-column: 2;
+    }
+    .item-actions {
+        grid-column: 2;
+        justify-content: flex-start;
+    }
+}
 </style>
+{% endblock %}
+{% block extra_js %}
+{% if checklist %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+    const itemList = document.getElementById(
+        "checklist-items"
+    );
+    if (itemList) {
+        const reorderUrl = itemList.dataset.reorderUrl;
+        new Sortable(itemList, {
+            animation: 150,
+            handle: ".drag-handle",
+            ghostClass: "sortable-ghost",
+            onEnd: async function () {
+                const itemIds = Array.from(
+                    itemList.querySelectorAll(
+                        ".item-card"
+                    )
+                ).map(
+                    item => Number(
+                        item.dataset.itemId
+                    )
+                );
+                const csrfToken = document.querySelector(
+                    "[name=csrfmiddlewaretoken]"
+                ).value;
+                try {
+                    const response = await fetch(
+                        reorderUrl,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+                                "X-CSRFToken":
+                                    csrfToken,
+                            },
+                            body: JSON.stringify({
+                                item_ids: itemIds,
+                            }),
+                        }
+                    );
+                    if (!response.ok) {
+                        throw new Error(
+                            "Unable to save order."
+                        );
+                    }
+                } catch (error) {
+                    console.error(error);
+                    alert(
+                        "The new checklist order could not be saved."
+                    );
+                    window.location.reload();
+                }
+            },
+        });
+    }
+</script>
+{% endif %}
 {% endblock %}
