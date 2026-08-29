@@ -1,10 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from .activity import log_activity
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
+from .services import generate_recurring_tasks_for_date
 from accounts.forms import (
     MembershipEditForm,
     TeamMemberCreateForm,
@@ -20,6 +22,7 @@ from .forms import (
     RecurringTaskForm,
 )
 from .models import (
+    ActivityLog,
     Checklist,
     ChecklistCompletion,
     ChecklistItem,
@@ -71,6 +74,43 @@ def dashboard(request, property_slug):
             Issue.Status.CLOSED,
         ]
     )
+    recent_completed_tasks = (
+        Task.objects
+        .filter(
+            property=property_obj,
+            status=Task.Status.COMPLETED,
+        )
+        .select_related("assigned_to")
+        .order_by("-completed_at")[:5]
+    )
+
+    recent_resolved_issues = (
+        Issue.objects
+        .filter(
+            property=property_obj,
+            status=Issue.Status.RESOLVED,
+        )
+        .select_related("assigned_to")
+        .order_by("-resolved_at")[:5]
+    )
+    recent_checklist_runs = (
+        ChecklistRun.objects
+        .filter(
+            checklist__property=property_obj,
+            completed_at__isnull=False,
+        )
+        .select_related(
+            "checklist",
+            "started_by",
+        )
+        .order_by("-completed_at")[:5]
+    )
+    recent_activity = (
+        ActivityLog.objects
+        .filter(property=property_obj)
+        .select_related("user")
+        .order_by("-created_at")[:8]
+    )
     urgent_items = (
         open_tasks.filter(
             priority=Task.Priority.URGENT,
@@ -92,6 +132,7 @@ def dashboard(request, property_slug):
         "recent_issues": recent_issues,
         "urgent_items": urgent_items,
         "active_page": "dashboard",
+        "recent_activity": recent_activity,
     }
     return render(
         request,
@@ -180,6 +221,16 @@ def task_create(request, property_slug):
             task = form.save(commit=False)
             task.property = property_obj
             task.save()
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.TASK_CREATED,
+                title=task.title,
+                user=request.user,
+                detail=(
+                    f"{task.get_category_display()} · "
+                    f"{task.get_priority_display()}"
+                ),
+            )
             return redirect(
                 "operations:task_list",
                 property_slug=property_obj.slug,
@@ -258,15 +309,22 @@ def task_complete(request, property_slug, pk):
         property=property_obj,
     )
     if request.method == "POST":
-        task.status = Task.Status.COMPLETED
-        task.completed_at = timezone.now()
-        task.save(
-            update_fields=[
-                "status",
-                "completed_at",
-                "updated_at",
-            ]
-        )
+        if task.status != Task.Status.COMPLETED:
+            task.status = Task.Status.COMPLETED
+            task.completed_at = timezone.now()
+            task.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "updated_at",
+                ]
+            )
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.TASK_COMPLETED,
+                title=task.title,
+                user=request.user,
+            )
     return redirect(
         "operations:task_list",
         property_slug=property_obj.slug,
@@ -318,6 +376,19 @@ def issue_create(request, property_slug):
             issue = form.save(commit=False)
             issue.property = property_obj
             issue.save()
+            detail_parts = [
+                issue.get_category_display(),
+                issue.get_priority_display(),
+            ]
+            if issue.location:
+                detail_parts.append(issue.location)
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.ISSUE_REPORTED,
+                title=issue.title,
+                user=request.user,
+                detail=" · ".join(detail_parts),
+            )
             return redirect(
                 "operations:issue_list",
                 property_slug=property_obj.slug,
@@ -405,6 +476,12 @@ def issue_resolve(request, property_slug, pk):
                 "updated_at",
             ]
         )
+        log_activity(
+            property_obj=property_obj,
+            event_type=ActivityLog.EventType.ISSUE_RESOLVED,
+            title=issue.title,
+            user=request.user,
+        )
     return redirect(
         "operations:issue_list",
         property_slug=property_obj.slug,
@@ -463,6 +540,13 @@ def handover_create(request, property_slug):
             if request.user.is_authenticated:
                 note.author = request.user
             note.save()
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.HANDOVER_ADDED,
+                title=note.note[:120],
+                user=request.user,
+                detail=note.get_shift_display(),
+            )
             return redirect(
                 "operations:handover_list",
                 property_slug=property_obj.slug,
@@ -558,6 +642,13 @@ def checklist_start(request, property_slug, pk):
                 if request.user.is_authenticated
                 else None
             ),
+        )
+        log_activity(
+            property_obj=property_obj,
+            event_type=ActivityLog.EventType.CHECKLIST_STARTED,
+            title=checklist.name,
+            user=request.user,
+            detail=f"{checklist.items.count()} items",
         )
         return redirect(
             "operations:checklist_run",
@@ -669,12 +760,21 @@ def checklist_complete(request, property_slug, pk):
                 flat=True,
             )
         )
-        if required_ids.issubset(completed_ids):
+        if (
+            required_ids.issubset(completed_ids)
+            and run.completed_at is None
+        ):
             run.completed_at = timezone.now()
             run.save(
                 update_fields=[
                     "completed_at",
                 ]
+            )
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.CHECKLIST_COMPLETED,
+                title=run.checklist.name,
+                user=request.user,
             )
     return redirect(
         "operations:checklist_run",
@@ -717,6 +817,13 @@ def team_member_create(request, property_slug):
                 user=user,
                 role=form.cleaned_data["role"],
                 job_title=form.cleaned_data["job_title"],
+            )
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.TEAM_MEMBER_ADDED,
+                title=user.get_full_name() or user.username,
+                user=request.user,
+                detail=form.cleaned_data["role"],
             )
             return redirect(
                 "operations:team_list",
@@ -1084,51 +1191,10 @@ def recurring_task_generate_today(request, property_slug):
         property_slug,
     )
     if request.method == "POST":
-        today = timezone.localdate()
-        recurring_tasks = RecurringTask.objects.filter(
-            property=property_obj,
-            is_active=True,
+        generate_recurring_tasks_for_date(
+            timezone.localdate(),
+            property_obj=property_obj,
         )
-        for recurring in recurring_tasks:
-            should_generate = False
-            if recurring.frequency == RecurringTask.Frequency.DAILY:
-                should_generate = True
-            elif (
-                recurring.frequency == RecurringTask.Frequency.WEEKLY
-                and recurring.weekday == today.weekday()
-            ):
-                should_generate = True
-            if not should_generate:
-                continue
-            due_at = None
-            if recurring.due_time:
-                naive_due = datetime.combine(
-                    today,
-                    recurring.due_time,
-                )
-                due_at = timezone.make_aware(
-                    naive_due,
-                    timezone.get_current_timezone(),
-                )
-            already_exists = Task.objects.filter(
-                property=property_obj,
-                recurring_source=recurring,
-                scheduled_date=today,
-            ).exists()
-            if already_exists:
-                continue
-            Task.objects.create(
-                property=property_obj,
-                recurring_source=recurring,
-                scheduled_date=today,
-                title=recurring.title,
-                description=recurring.description,
-                category=recurring.category,
-                priority=recurring.priority,
-                assigned_to=recurring.assigned_to,
-                due_at=due_at,
-                status=Task.Status.OPEN,
-            )
     return redirect(
         "operations:task_list",
         property_slug=property_obj.slug,
@@ -1212,4 +1278,34 @@ def recurring_task_delete(request, property_slug, pk):
     return redirect(
         "operations:recurring_task_list",
         property_slug=property_obj.slug,
+    )
+@login_required
+def activity_list(request, property_slug):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug,
+    )
+    activities = (
+        ActivityLog.objects
+        .filter(property=property_obj)
+        .select_related("user")
+        .order_by("-created_at")
+    )
+    event_filter = request.GET.get("event_type")
+    if event_filter:
+        activities = activities.filter(
+            event_type=event_filter,
+        )
+    context = {
+        "property": property_obj,
+        "membership": membership,
+        "activities": activities,
+        "event_filter": event_filter,
+        "event_choices": ActivityLog.EventType.choices,
+        "active_page": "activity",
+    }
+    return render(
+        request,
+        "operations/activity_list.html",
+        context,
     )

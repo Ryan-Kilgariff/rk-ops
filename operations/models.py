@@ -320,6 +320,14 @@ class RecurringTask(models.Model):
         null=True,
         blank=True,
     )
+    last_generated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    last_generated_for = models.DateField(
+        null=True,
+        blank=True,
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -327,3 +335,42 @@ class RecurringTask(models.Model):
         ordering = ["title"]
     def __str__(self):
         return self.title
+class ActivityLog(models.Model):
+    class EventType(models.TextChoices):
+        TASK_CREATED = "task_created", "Task created"
+        TASK_COMPLETED = "task_completed", "Task completed"
+        ISSUE_REPORTED = "issue_reported", "Issue reported"
+        ISSUE_RESOLVED = "issue_resolved", "Issue resolved"
+        CHECKLIST_STARTED = "checklist_started", "Checklist started"
+        CHECKLIST_COMPLETED = "checklist_completed", "Checklist completed"
+        HANDOVER_ADDED = "handover_added", "Handover note added"
+        TEAM_MEMBER_ADDED = "team_member_added", "Team member added"
+        RECURRING_GENERATED = "recurring_generated", "Recurring task generated"
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="activity_logs",
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ops_activity_logs",
+    )
+    event_type = models.CharField(
+        max_length=40,
+        choices=EventType.choices,
+    )
+    title = models.CharField(max_length=200)
+    detail = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+    class Meta:
+        ordering = ["-created_at"]
+    def __str__(self):
+        return f"{self.get_event_type_display()} - {self.title}"

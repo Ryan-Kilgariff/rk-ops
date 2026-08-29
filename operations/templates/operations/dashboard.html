@@ -49,6 +49,53 @@ Dashboard
         </div>
     </div>
 </section>
+    <section class="section activity-section">
+        <div class="section-header">
+            <h2 class="section-title">
+                Recent Activity
+            </h2>
+            <a
+                href="{% url 'operations:activity_list' property.slug %}"
+                class="clear-filter"
+            >
+                View all activity
+            </a>
+        </div>
+    <div class="activity-list">
+        {% for activity in recent_activity %}
+            <article class="activity-item">
+                <div class="activity-main">
+                    <div class="activity-title">
+                        {{ activity.get_event_type_display }}
+                    </div>
+                    <div class="activity-name">
+                        {{ activity.title }}
+                    </div>
+                    {% if activity.detail %}
+                        <div class="task-meta">
+                            {{ activity.detail }}
+                        </div>
+                    {% endif %}
+                    {% if activity.user %}
+                        <div class="task-meta">
+                            by
+                            {{ activity.user.get_full_name|default:activity.user.username }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="activity-time">
+                    {{ activity.created_at|date:"d M" }}
+                    <br>
+                    {{ activity.created_at|date:"H:i" }}
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                No recent activity yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
 <section class="section">
     <div class="section-header">
         <h2 class="section-title">
@@ -138,4 +185,55 @@ Dashboard
         {% endfor %}
     </div>
 </section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.activity-section {
+    max-width: 100%;
+}
+.activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.activity-item {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+.activity-main {
+    min-width: 0;
+    flex: 1;
+}
+.activity-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.activity-name {
+    margin-top: 3px;
+    font-weight: 700;
+}
+.activity-time {
+    flex: 0 0 auto;
+    text-align: right;
+    color: #6b7280;
+    font-size: 13px;
+}
+.clear-filter {
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 700;
+}
+.clear-filter:hover {
+    color: #111827;
+}
+</style>
 {% endblock %}

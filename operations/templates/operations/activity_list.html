@@ -1,0 +1,182 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Activity
+{% endblock %}
+{% block topbar_title %}
+Activity
+{% endblock %}
+{% block content %}
+<div class="section-header">
+    <div>
+        <p class="page-eyebrow">
+            Operations
+        </p>
+        <h1 class="page-title">
+            Activity
+        </h1>
+        <p class="page-subtitle">
+            Recent operational activity at {{ property.name }}.
+        </p>
+    </div>
+</div>
+<section class="section">
+    <form
+        method="get"
+        class="filters"
+    >
+        <div>
+            <label for="event_type">
+                Event type
+            </label>
+            <select
+                name="event_type"
+                id="event_type"
+            >
+                <option value="">
+                    All activity
+                </option>
+                {% for value, label in event_choices %}
+                    <option
+                        value="{{ value }}"
+                        {% if event_filter == value %}
+                            selected
+                        {% endif %}
+                    >
+                        {{ label }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <button
+            type="submit"
+            class="button"
+        >
+            Filter
+        </button>
+        <a
+            href="{% url 'operations:activity_list' property.slug %}"
+            class="clear-filter"
+        >
+            Clear
+        </a>
+    </form>
+</section>
+<section class="section">
+    <div class="activity-list">
+        {% for activity in activities %}
+            <article class="activity-item">
+                <div class="activity-main">
+                    <div class="activity-title">
+                        {{ activity.get_event_type_display }}
+                    </div>
+                    <div class="activity-name">
+                        {{ activity.title }}
+                    </div>
+                    {% if activity.detail %}
+                        <div class="task-meta">
+                            {{ activity.detail }}
+                        </div>
+                    {% endif %}
+                    {% if activity.user %}
+                        <div class="task-meta">
+                            by
+                            {{ activity.user.get_full_name|default:activity.user.username }}
+                        </div>
+                    {% else %}
+                        <div class="task-meta">
+                            System
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="activity-time">
+                    {{ activity.created_at|date:"d M Y" }}
+                    <br>
+                    {{ activity.created_at|date:"H:i" }}
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                No activity matches this filter.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.filters {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 18px;
+    display: flex;
+    align-items: end;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+.filters label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b7280;
+}
+.filters select {
+    min-width: 220px;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+}
+.clear-filter {
+    padding: 10px 4px;
+    color: #6b7280;
+    font-size: 14px;
+}
+.activity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.activity-item {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 16px 18px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+.activity-main {
+    min-width: 0;
+    flex: 1;
+}
+.activity-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.activity-name {
+    margin-top: 3px;
+    font-weight: 700;
+}
+.activity-time {
+    flex: 0 0 auto;
+    text-align: right;
+    color: #6b7280;
+    font-size: 13px;
+}
+@media (max-width: 650px) {
+    .activity-item {
+        align-items: flex-start;
+    }
+    .activity-time {
+        min-width: 70px;
+    }
+
+}
+</style>
+{% endblock %}

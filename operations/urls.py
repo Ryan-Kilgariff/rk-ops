@@ -173,4 +173,9 @@ urlpatterns = [
         views.recurring_task_delete,
         name="recurring_task_delete",
     ),
+    path(
+        "p/<slug:property_slug>/activity/",
+        views.activity_list,
+        name="activity_list",
+    ),
 ]

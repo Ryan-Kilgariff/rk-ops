@@ -334,6 +334,12 @@
                 Handover
             </a>
             <a
+                href="{% url 'operations:activity_list' property.slug %}"
+                class="nav-link {% if active_page == 'activity' %}active{% endif %}"
+            >
+                Activity
+            </a>
+            <a
                 href="{% url 'operations:checklist_list' property.slug %}"
                 class="nav-link {% if active_page == 'checklists' %}active{% endif %}"
             >

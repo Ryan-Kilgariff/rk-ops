@@ -57,6 +57,31 @@ Recurring Tasks
                             Due {{ recurring.due_time|time:"H:i" }}
                         </div>
                     {% endif %}
+                    {% if recurring.last_generated_at %}
+                        <div class="task-meta automation-meta">
+                            Last generated:
+                            {{ recurring.last_generated_at|date:"d M Y · H:i" }}
+                        </div>
+                        {% if recurring.last_generated_for %}
+                            <div class="task-meta">
+                                {{ recurring.get_category_display }}
+                                · {{ recurring.get_priority_display }}
+                            </div>
+                            <div class="task-meta">
+                                {% if recurring.frequency == "daily" %}
+                                    Daily
+                                {% elif recurring.frequency == "weekly" %}
+                                    Every {{ recurring.get_weekday_display }}
+                                {% endif %}
+                                {% if recurring.due_time %}
+                                    · Due {{ recurring.due_time|time:"H:i" }}
+                                {% endif %}
+                            </div>
+                    {% else %}
+                        <div class="task-meta automation-meta">
+                            Not generated yet
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="recurring-actions">
                     <span
@@ -122,6 +147,9 @@ Recurring Tasks
 {% endblock %}
 {% block extra_css %}
 <style>
+.automation-meta {
+    margin-top: 8px;
+}
 .recurring-actions {
     display: flex;
     align-items: center;
