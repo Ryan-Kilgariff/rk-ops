@@ -15,6 +15,19 @@ Dashboard
 <p class="page-subtitle">
     Here's what's happening at {{ property.name }} today.
 </p>
+<div class="dashboard-group-heading">
+    <div>
+        <p class="dashboard-group-eyebrow">
+            Now
+        </p>
+        <h2>
+            Immediate Operations
+        </h2>
+        <p>
+            What needs attention right now.
+        </p>
+    </div>
+</div>
 <section class="stats">
     <div class="stat-card">
         <div class="stat-label">
@@ -24,7 +37,7 @@ Dashboard
             {{ tasks_today.count }}
         </div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card {% if overdue_tasks.count > 0 %}stat-alert{% endif %}">
         <div class="stat-label">
             Overdue
         </div>
@@ -40,7 +53,7 @@ Dashboard
             {{ open_issues.count }}
         </div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card {% if urgent_items > 0 %}stat-alert{% endif %}">
         <div class="stat-label">
             Urgent
         </div>
@@ -49,61 +62,19 @@ Dashboard
         </div>
     </div>
 </section>
-    <section class="section activity-section">
-        <div class="section-header">
-            <h2 class="section-title">
-                Recent Activity
-            </h2>
-            <a
-                href="{% url 'operations:activity_list' property.slug %}"
-                class="clear-filter"
-            >
-                View all activity
-            </a>
-        </div>
-    <div class="activity-list">
-        {% for activity in recent_activity %}
-            <article class="activity-item">
-                <div class="activity-main">
-                    <div class="activity-title">
-                        {{ activity.get_event_type_display }}
-                    </div>
-                    <div class="activity-name">
-                        {{ activity.title }}
-                    </div>
-                    {% if activity.detail %}
-                        <div class="task-meta">
-                            {{ activity.detail }}
-                        </div>
-                    {% endif %}
-                    {% if activity.user %}
-                        <div class="task-meta">
-                            by
-                            {{ activity.user.get_full_name|default:activity.user.username }}
-                        </div>
-                    {% endif %}
-                </div>
-                <div class="activity-time">
-                    {{ activity.created_at|date:"d M" }}
-                    <br>
-                    {{ activity.created_at|date:"H:i" }}
-                </div>
-            </article>
-        {% empty %}
-            <div class="empty-state">
-                No recent activity yet.
-            </div>
-        {% endfor %}
-    </div>
-</section>
 <section class="section">
     <div class="section-header">
-        <h2 class="section-title">
-            Today's Tasks
-        </h2>
+        <div>
+            <h2 class="section-title">
+                Today's Tasks
+            </h2>
+            <div class="task-meta">
+                Tasks scheduled for today
+            </div>
+        </div>
         <a
             href="{% url 'operations:task_create' property.slug %}"
-            class="button"
+            class="button section-action"
         >
             + New Task
         </a>
@@ -144,12 +115,17 @@ Dashboard
 </section>
 <section class="section">
     <div class="section-header">
-        <h2 class="section-title">
-            Open Issues
-        </h2>
+        <div>
+            <h2 class="section-title">
+                Open Issues
+            </h2>
+            <div class="task-meta">
+                Outstanding operational issues
+            </div>
+        </div>
         <a
             href="{% url 'operations:issue_create' property.slug %}"
-            class="button"
+            class="button section-action"
         >
             + Report Issue
         </a>
@@ -185,9 +161,711 @@ Dashboard
         {% endfor %}
     </div>
 </section>
+<div class="dashboard-group-heading">
+    <div>
+        <p class="dashboard-group-eyebrow">
+            Performance
+        </p>
+        <h2>
+            Operational Performance
+        </h2>
+        <p>
+            Current health and recent performance trends.
+        </p>
+    </div>
+</div>
+<section class="section">
+    <div class="section-header">
+        <h2 class="section-title">
+            Operational Health
+        </h2>
+    </div>
+    <div class="health-grid">
+        <article class="health-card">
+            <div class="health-label">
+                Task Completion
+            </div>
+            <div class="health-value">
+                {{ task_completion_rate }}%
+            </div>
+            <div class="task-meta">
+                {{ today_completed_count }}
+                of
+                {{ today_task_count }}
+                tasks completed today
+            </div>
+            <div class="progress-track">
+                <div
+                    class="progress-fill"
+                    style="--progress: {{ task_completion_rate }}%;"
+                ></div>
+            </div>
+        </article>
+       <article class="health-card">
+            <div class="health-label">
+                Unassigned Work
+            </div>
+            <div class="health-value">
+                {{ unassigned_work }}
+            </div>
+            <div class="task-meta">
+                {{ unassigned_tasks }} tasks
+                ·
+                {{ unassigned_issues }} issues
+            </div>
+        </article>
+        <article class="health-card">
+            <div class="health-label">
+                Checklists Completed
+            </div>
+            <div class="health-value">
+                {{ completed_checklists_today }}
+            </div>
+            <div class="task-meta">
+                Completed today
+            </div>
+        </article>
+        <article class="health-card">
+            <div class="health-label">
+                Active Handover Notes
+            </div>
+            <div class="health-value">
+                {{ active_handover_count }}
+            </div>
+            <div class="task-meta">
+                Still requiring attention
+            </div>
+        </article>
+    </div>
+</section>
+{% if overdue_tasks %}
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Overdue Attention
+            </h2>
+            <div class="task-meta">
+                Tasks requiring immediate follow-up
+            </div>
+        </div>
+        <a
+            href="{% url 'operations:task_list' property.slug %}?status=open"
+            class="clear-filter"
+        >
+            View tasks
+        </a>
+    </div>
+    {% if top_overdue_category %}
+        <div class="attention-summary">
+            <strong>
+                {{ top_overdue_category }}
+            </strong>
+            currently has the highest overdue workload
+            with
+            <strong>
+                {{ top_overdue_count }}
+            </strong>
+            task{{ top_overdue_count|pluralize }}.
+        </div>
+    {% endif %}
+    <div class="overdue-list">
+        {% for item in overdue_task_details %}
+            <article class="overdue-card">
+                <div class="overdue-main">
+                    <div class="overdue-title">
+                        {{ item.task.title }}
+                    </div>
+                    <div class="task-meta">
+                        {{ item.task.get_category_display }}
+                        ·
+                        {{ item.task.get_priority_display }}
+                        {% if item.task.assigned_to %}
+                            · {{ item.task.assigned_to.username }}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="overdue-age">
+                    {% if item.overdue_days >= 1 %}
+                        {{ item.overdue_days }}
+                        day{{ item.overdue_days|pluralize }}
+                        overdue
+                    {% elif item.overdue_hours != None %}
+                        {{ item.overdue_hours }}
+                        hour{{ item.overdue_hours|pluralize }}
+                        overdue
+                    {% else %}
+                        Overdue
+                    {% endif %}
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Last 7 Days
+            </h2>
+            <div class="task-meta">
+                Operational performance
+            </div>
+        </div>
+    </div>
+    <div class="performance-grid">
+        <article class="performance-card">
+            <div class="health-label">
+                Task Completion
+            </div>
+            <div class="performance-value">
+                {{ seven_day_completion_rate }}%
+            </div>
+            <div class="task-meta">
+                {{ seven_day_completed_count }}
+                of
+                {{ seven_day_task_count }}
+                scheduled tasks
+            </div>
+        </article>
+        <article class="performance-card">
+            <div class="health-label">
+                Tasks Completed
+            </div>
+            <div class="performance-value">
+                {{ seven_day_completed_count }}
+            </div>
+            <div class="task-meta">
+                Last 7 days
+            </div>
+        </article>
+        <article class="performance-card">
+            <div class="health-label">
+                Issues
+            </div>
+            <div class="performance-split">
+                <div>
+                    <strong>
+                        {{ seven_day_issues_reported }}
+                    </strong>
+                    <span>
+                        Reported
+                    </span>
+                </div>
+                <div>
+                    <strong>
+                        {{ seven_day_issues_resolved }}
+                    </strong>
+                    <span>
+                        Resolved
+                    </span>
+                </div>
+            </div>
+        </article>
+        <article class="performance-card">
+            <div class="health-label">
+                Checklists
+            </div>
+            <div class="performance-value">
+                {{ seven_day_checklists_completed }}
+            </div>
+            <div class="task-meta">
+                Completed
+            </div>
+        </article>
+    </div>
+    <div class="seven-day-table">
+        <div class="seven-day-header">
+            <span>
+                Day
+            </span>
+            <span>
+                Tasks
+            </span>
+            <span>
+                Reported
+            </span>
+            <span>
+                Resolved
+            </span>
+            <span>
+                Checklists
+            </span>
+        </div>
+        {% for day in seven_day_activity %}
+            <div class="seven-day-row">
+                <div>
+                    <strong>
+                        {{ day.date|date:"D" }}
+                    </strong>
+                    <div class="task-meta">
+                        {{ day.date|date:"d M" }}
+                    </div>
+                </div>
+                <span>
+                    {{ day.completed_tasks }}
+                </span>
+                <span>
+                    {{ day.issues_reported }}
+                </span>
+                <span>
+                    {{ day.issues_resolved }}
+                </span>
+                <span>
+                    {{ day.checklists_completed }}
+                </span>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+<div class="dashboard-group-heading">
+    <div>
+        <p class="dashboard-group-eyebrow">
+            People
+        </p>
+        <h2>
+            Workload & Capacity
+        </h2>
+        <p>
+            Where work is concentrated across teams and departments.
+        </p>
+    </div>
+</div>
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Department Workload
+            </h2>
+            <div class="task-meta">
+                Current operational pressure by department
+            </div>
+        </div>
+    </div>
+    <div class="department-grid">
+        {% for department in department_workload_dashboard %}
+            <article class="department-card">
+                <div class="department-header">
+                    <h3 class="department-name">
+                        {{ department.label }}
+                    </h3>
+                        <span class="department-total">
+                            {{ department.total_pressure }}
+                        </span>
+                    </div>
+                <div class="department-stats">
+                    <div>
+                        <strong>
+                            {{ department.open_tasks }}
+                        </strong>
+                        <span>
+                            Open tasks
+                        </span>
+                    </div>
+                    <div>
+                        <strong>
+                            {{ department.overdue_tasks }}
+                        </strong>
+                        <span>
+                            Overdue
+                        </span>
+                    </div>
+                    <div>
+                        <strong>
+                            {{ department.open_issues }}
+                        </strong>
+                        <span>
+                            Issues
+                        </span>
+                    </div>
+                </div>
+            </article>
+        {% endfor %}
+    </div>
+</section>
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Staff Workload
+            </h2>
+            <div class="task-meta">
+                Current assigned operational workload
+            </div>
+        </div>
+        {% if can_manage_team %}
+            <a
+                href="{% url 'operations:team_list' property.slug %}"
+                class="button secondary-action"
+            >
+                View team
+            </a>
+        {% endif %}
+    </div>
+   {% if unassigned_work > 0 %}
+        <div class="unassigned-summary">
+            <strong>
+                {{ unassigned_work }}
+            </strong>
+            item{{ unassigned_work|pluralize }}
+            currently unassigned
+            <span>
+                {{ unassigned_tasks }}
+                task{{ unassigned_tasks|pluralize }}
+                ·
+                {{ unassigned_issues }}
+                issue{{ unassigned_issues|pluralize }}
+            </span>
+        </div>
+        <div class="unassigned-work-list">
+            {% for task in unassigned_task_preview %}
+                <div class="unassigned-work-item">
+                    <div class="unassigned-work-main">
+                        <a
+                            href="{% url 'operations:task_edit' property.slug task.pk %}"
+                            class="work-item-link"
+                        >
+                            {{ task.title }}
+                        </a>
+                        <div class="task-meta">
+                            Task · {{ task.get_priority_display }}
+                        </div>
+                    </div>
+                    {% if can_manage_team %}
+                        <form
+                            method="post"
+                            action="{% url 'operations:task_quick_assign' property.slug task.pk %}"
+                            class="quick-assign-form"
+                        >
+                            {% csrf_token %}
+                            <select
+                                name="membership_id"
+                                class="quick-assign-select"
+                                required
+                            >
+                                <option value="">
+                                    Assign to...
+                                </option>
+                                {% for membership in active_memberships %}
+                                    <option value="{{ membership.pk }}">
+                                        {% if membership.user.get_full_name %}
+                                            {{ membership.user.get_full_name }}
+                                        {% else %}
+                                            {{ membership.user.username }}
+                                        {% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <button
+                                type="submit"
+                                class="quick-assign-button"
+                            >
+                                Assign
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            {% for issue in unassigned_issue_preview %}
+                <div class="unassigned-work-item">
+                    <div class="unassigned-work-main">
+                        <a
+                            href="{% url 'operations:issue_edit' property.slug issue.pk %}"
+                            class="work-item-link"
+                        >
+                            {{ issue.title }}
+                        </a>
+                        <div class="task-meta">
+                            Issue · {{ issue.get_priority_display }}
+                        </div>
+                    </div>
+                    {% if can_manage_team %}
+                        <form
+                            method="post"
+                            action="{% url 'operations:issue_quick_assign' property.slug issue.pk %}"
+                            class="quick-assign-form"
+                        >
+                            {% csrf_token %}
+                            <select
+                                name="membership_id"
+                                class="quick-assign-select"
+                                required
+                            >
+                                <option value="">
+                                    Assign to...
+                                </option>
+                                {% for membership in active_memberships %}
+                                    <option value="{{ membership.pk }}">
+                                        {% if membership.user.get_full_name %}
+                                            {{ membership.user.get_full_name }}
+                                        {% else %}
+                                            {{ membership.user.username }}
+                                        {% endif %}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <button
+                                type="submit"
+                                class="quick-assign-button"
+                            >
+                                Assign
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    <div class="staff-grid">
+        {% for staff in staff_workload_dashboard %}
+                <article class="staff-card">
+                    <div class="staff-header">
+                        <div>
+                            <h3 class="staff-name">
+                                {% if staff.user.get_full_name %}
+                                    {{ staff.user.get_full_name }}
+                                {% else %}
+                                    {{ staff.user.username }}
+                                {% endif %}
+                            </h3>
+                            <div class="task-meta">
+                                {% if staff.membership.job_title %}
+                                    {{ staff.membership.job_title }}
+                                {% else %}
+                                    {{ staff.membership.get_role_display }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <span class="staff-total">
+                            {{ staff.total_workload }}
+                        </span>
+                    </div>
+                    <div class="staff-stats">
+                        <div>
+                            <strong>
+                                {{ staff.open_tasks }}
+                            </strong>
+                            <span>
+                                Open tasks
+                            </span>
+                        </div>
+                        <div>
+                            <strong>
+                                {{ staff.overdue_tasks }}
+                            </strong>
+                            <span>
+                                Overdue
+                            </span>
+                        </div>
+                        <div>
+                            <strong>
+                                {{ staff.open_issues }}
+                            </strong>
+                            <span>
+                                Issues
+                            </span>
+                        </div>
+                    </div>
+                    {% if staff.task_preview or staff.issue_preview %}
+                        <div class="staff-preview">
+                            {% for task in staff.task_preview %}
+                                <div class="staff-preview-item">
+                                    <div class="staff-preview-main">
+                                        <a
+                                            href="{% url 'operations:task_edit' property.slug task.pk %}"
+                                            class="work-item-link"
+                                        >
+                                            {{ task.title }}
+                                        </a>
+                                        <div class="task-meta">
+                                            Task
+                                            · {{ task.get_priority_display }}
+                                        </div>
+                                    </div>
+                                    {% if can_manage_team %}
+                                        <form
+                                            method="post"
+                                            action="{% url 'operations:task_quick_assign' property.slug task.pk %}"
+                                            class="quick-assign-form"
+                                        >
+                                            {% csrf_token %}
+                                                <select
+                                                    name="membership_id"
+                                                    class="quick-assign-select"
+                                                >
+                                                    <option value="">
+                                                        Unassigned
+                                                    </option>
+                                                    {% for membership in active_memberships %}
+                                                        <option
+                                                            value="{{ membership.pk }}"
+                                                            {% if membership.user_id == task.assigned_to_id %}
+                                                                selected
+                                                            {% endif %}
+                                                        >
+                                                            {% if membership.user.get_full_name %}
+                                                                {{ membership.user.get_full_name }}
+                                                            {% else %}
+                                                                {{ membership.user.username }}
+                                                            {% endif %}
+                                                        </option>
+                                                    {% endfor %}
+                                                </select>
+                                            <button
+                                                type="submit"
+                                                class="quick-assign-button"
+                                            >
+                                                Reassign
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                            {% for issue in staff.issue_preview %}
+                                <div class="staff-preview-item">
+                                    <div class="staff-preview-main">
+                                        <a
+                                            href="{% url 'operations:issue_edit' property.slug issue.pk %}"
+                                            class="work-item-link"
+                                        >
+                                            {{ issue.title }}
+                                        </a>
+                                        <div class="task-meta">
+                                            Issue
+                                            · {{ issue.get_priority_display }}
+                                        </div>
+                                    </div>
+                                    {% if can_manage_team %}
+                                        <form
+                                            method="post"
+                                            action="{% url 'operations:issue_quick_assign' property.slug issue.pk %}"
+                                            class="quick-assign-form"
+                                        >
+                                            {% csrf_token %}
+                                            <select
+                                                name="membership_id"
+                                                class="quick-assign-select"
+                                            >
+                                                <option value="">
+                                                    Unassigned
+                                                </option>
+                                                {% for membership in active_memberships %}
+                                                    <option
+                                                        value="{{ membership.pk }}"
+                                                        {% if membership.user_id == issue.assigned_to_id %}
+                                                            selected
+                                                        {% endif %}
+                                                    >
+                                                        {% if membership.user.get_full_name %}
+                                                            {{ membership.user.get_full_name }}
+                                                        {% else %}
+                                                            {{ membership.user.username }}
+                                                        {% endif %}
+                                                    </option>
+                                                {% endfor %}
+                                            </select>
+                                            <button
+                                                type="submit"
+                                                class="quick-assign-button"
+                                            >
+                                                Reassign
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </article>
+            {% endfor %}
+        <div class="empty-state">
+            No active team members yet.
+        </div>
+    </div>
+</section>
+<div class="dashboard-group-heading">
+    <div>
+        <p class="dashboard-group-eyebrow">
+            Activity
+        </p>
+        <h2>
+            Recent Operational Activity
+        </h2>
+        <p>
+            Latest actions recorded across the property.
+        </p>
+    </div>
+</div>
+    <section class="section activity-section">
+        <div class="section-header">
+            <h2 class="section-title">
+                Recent Activity
+            </h2>
+            <a
+                href="{% url 'operations:activity_list' property.slug %}"
+                class="button secondary-action"
+            >
+                View all activity
+            </a>
+        </div>
+    <div class="activity-list">
+        {% for activity in recent_activity %}
+            <article class="activity-item">
+                <div class="activity-main">
+                    <div class="activity-title">
+                        {{ activity.get_event_type_display }}
+                    </div>
+                    <div class="activity-name">
+                        {{ activity.title }}
+                    </div>
+                    {% if activity.detail %}
+                        <div class="task-meta">
+                            {{ activity.detail }}
+                        </div>
+                    {% endif %}
+                    {% if activity.user %}
+                        <div class="task-meta">
+                            by
+                            {{ activity.user.get_full_name|default:activity.user.username }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="activity-time">
+                    {{ activity.created_at|date:"d M" }}
+                    <br>
+                    {{ activity.created_at|date:"H:i" }}
+                </div>
+            </article>
+        {% empty %}
+            <div class="empty-state">
+                No recent activity yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
 {% endblock %}
 {% block extra_css %}
 <style>
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 14px;
+}
+.section-action {
+    flex: 0 0 auto;
+    min-height: 40px;
+    padding: 10px 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+}
+.section {
+    margin-top: 24px;
+}
 .activity-section {
     max-width: 100%;
 }
@@ -234,6 +912,510 @@ Dashboard
 }
 .clear-filter:hover {
     color: #111827;
+}
+.health-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        4,
+        minmax(0, 1fr)
+    );
+    gap: 18px;
+}
+.health-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+}
+.health-label {
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.health-value {
+    margin-top: 10px;
+    font-size: 30px;
+    font-weight: 700;
+}
+.progress-track {
+    height: 8px;
+    margin-top: 14px;
+    background: #e5e7eb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.progress-fill {
+    width: var(--progress);
+    height: 100%;
+    background: #111827;
+    border-radius: 999px;
+}
+.issue-breakdown {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+}
+.issue-breakdown div {
+    color: #6b7280;
+    font-size: 13px;
+}
+.issue-breakdown strong {
+    display: block;
+    margin-bottom: 2px;
+    color: #111827;
+    font-size: 22px;
+}
+@media (max-width: 1000px) {
+    .health-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 650px) {
+    .health-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.performance-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        4,
+        minmax(0, 1fr)
+    );
+    gap: 18px;
+}
+.performance-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+}
+.performance-value {
+    margin-top: 10px;
+    font-size: 30px;
+    font-weight: 700;
+}
+.performance-split {
+    display: flex;
+    gap: 32px;
+    margin-top: 14px;
+}
+.performance-split strong {
+    display: block;
+    font-size: 26px;
+}
+.performance-split span {
+    color: #6b7280;
+    font-size: 13px;
+}
+.seven-day-table {
+    margin-top: 18px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.seven-day-header,
+.seven-day-row {
+    display: grid;
+    grid-template-columns:
+        minmax(120px, 1.5fr)
+        repeat(4, 1fr);
+    align-items: center;
+    gap: 16px;
+    padding: 14px 18px;
+}
+.seven-day-header {
+    background: #f9fafb;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.seven-day-row {
+    border-top: 1px solid #f3f4f6;
+}
+.seven-day-row > span {
+    font-weight: 700;
+}
+@media (max-width: 1000px) {
+    .performance-grid {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+}
+@media (max-width: 700px) {
+    .performance-grid {
+        grid-template-columns: 1fr;
+    }
+    .seven-day-table {
+        overflow-x: auto;
+    }
+    .seven-day-header,
+    .seven-day-row {
+        min-width: 650px;
+    }
+}
+.attention-summary {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    color: #4b5563;
+    font-size: 14px;
+}
+.attention-summary strong {
+    color: #111827;
+}
+.overdue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.overdue-card {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 16px 18px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+}
+.overdue-main {
+    min-width: 0;
+    flex: 1;
+}
+.overdue-title {
+    font-weight: 700;
+}
+.overdue-age {
+    flex: 0 0 auto;
+    font-size: 13px;
+    font-weight: 700;
+    color: #b91c1c;
+}
+@media (max-width: 650px) {
+    .overdue-card {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 8px;
+    }
+}
+.department-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(240px, 1fr)
+    );
+    gap: 16px;
+}
+.department-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 18px;
+    width: 100%;
+}
+.department-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.department-name {
+    margin: 0;
+    font-size: 16px;
+}
+.department-total {
+    min-width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #f3f4f6;
+    font-size: 13px;
+    font-weight: 700;
+}
+.department-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+.department-stats div {
+    min-width: 0;
+}
+.department-stats strong {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 22px;
+}
+.department-stats span {
+    color: #6b7280;
+    font-size: 12px;
+}
+@media (max-width: 1000px) {
+    .department-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 650px) {
+    .department-grid {
+        grid-template-columns: 1fr;
+    }
+}
+.staff-grid {
+    display: grid;
+    grid-template-columns: repeat(
+        auto-fit,
+        minmax(260px, 1fr)
+    );
+    gap: 16px;
+}
+.staff-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 18px;
+}
+.staff-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.staff-name {
+    margin: 0 0 3px;
+    font-size: 16px;
+}
+.staff-total {
+    min-width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #f3f4f6;
+    font-size: 13px;
+    font-weight: 700;
+}
+.staff-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+.staff-stats strong {
+    display: block;
+    margin-bottom: 3px;
+    font-size: 22px;
+}
+.staff-stats span {
+    color: #6b7280;
+    font-size: 12px;
+}
+.unassigned-summary {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    color: #4b5563;
+    font-size: 14px;
+}
+.unassigned-summary strong {
+    color: #111827;
+}
+.unassigned-summary span {
+    margin-left: 8px;
+    color: #6b7280;
+    font-size: 13px;
+}
+@media (max-width: 1000px) {
+    .staff-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+@media (max-width: 650px) {
+    .staff-grid {
+        grid-template-columns: 1fr;
+    }
+    .unassigned-summary span {
+        display: block;
+        margin: 5px 0 0;
+    }
+}
+.dashboard-group-heading {
+    margin-top: 34px;
+    margin-bottom: 14px;
+}
+.dashboard-group-heading:first-of-type {
+    margin-top: 26px;
+}
+.dashboard-group-eyebrow {
+    margin: 0 0 4px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+.dashboard-group-heading h2 {
+    margin: 0;
+    font-size: 22px;
+}
+.dashboard-group-heading p {
+    margin: 5px 0 0;
+    color: #6b7280;
+    font-size: 14px;
+}
+.dashboard-group-heading + .section {
+    margin-top: 0;
+}
+.stat-alert {
+    border-color: #fecaca;
+}
+.stat-alert .stat-value {
+    color: #b91c1c;
+}
+.secondary-action {
+    background: white;
+    color: #111827;
+    border: 1px solid #d1d5db;
+}
+.secondary-action:hover {
+    background: #f9fafb;
+}
+.staff-grid > .empty-state {
+    grid-column: 1 / -1;
+}
+.staff-preview {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.staff-preview-item strong {
+    font-size: 13px;
+}
+.unassigned-work-list {
+    margin-bottom: 16px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.unassigned-work-item {
+    padding: 12px 16px;
+    border-top: 1px solid #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+.unassigned-work-item:first-child {
+    border-top: 0;
+}
+.unassigned-work-main {
+    min-width: 0;
+    flex: 1;
+}
+.quick-assign-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.quick-assign-select {
+    min-width: 150px;
+    padding: 8px 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    font: inherit;
+    font-size: 13px;
+}
+.quick-assign-button {
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: #111827;
+    color: white;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.quick-assign-button:hover {
+    background: #1f2937;
+}
+@media (max-width: 700px) {
+    .unassigned-work-item {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .quick-assign-form {
+        width: 100%;
+    }
+    .quick-assign-select {
+        flex: 1;
+        min-width: 0;
+    }
+}
+.unassigned-work-item:first-child {
+    border-top: 0;
+}
+.work-item-link {
+    color: #111827;
+    font-weight: 700;
+    text-decoration: none;
+}
+.work-item-link:hover {
+    text-decoration: underline;
+}
+.staff-preview-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+
+    gap: 10px;
+}
+.staff-preview-main {
+    min-width: 0;
+    width: 100%;
+}
+.staff-preview-main .work-item-link {
+    display: block;
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 800px) {
+    .staff-preview-item {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}
+.staff-preview-item .quick-assign-form {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    gap: 8px;
+    margin: 0;
+}
+.staff-preview-item .quick-assign-select {
+    width: 100%;
+    min-width: 0;
+}
+.staff-preview-item .quick-assign-button {
+    white-space: nowrap;
 }
 </style>
 {% endblock %}

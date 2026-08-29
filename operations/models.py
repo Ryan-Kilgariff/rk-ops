@@ -339,8 +339,10 @@ class ActivityLog(models.Model):
     class EventType(models.TextChoices):
         TASK_CREATED = "task_created", "Task created"
         TASK_COMPLETED = "task_completed", "Task completed"
+        TASK_ASSIGNED = "task_assigned", "Task assigned"
         ISSUE_REPORTED = "issue_reported", "Issue reported"
         ISSUE_RESOLVED = "issue_resolved", "Issue resolved"
+        ISSUE_ASSIGNED = "issue_assigned", "Issue assigned"
         CHECKLIST_STARTED = "checklist_started", "Checklist started"
         CHECKLIST_COMPLETED = "checklist_completed", "Checklist completed"
         HANDOVER_ADDED = "handover_added", "Handover note added"

@@ -37,7 +37,7 @@ from .utils import (
     require_management_access,
     require_supervisory_access,
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 @login_required
 def dashboard(request, property_slug):
     property_obj, membership = get_property_for_user(
@@ -46,6 +46,113 @@ def dashboard(request, property_slug):
     )
     now = timezone.now()
     today = timezone.localdate()
+    seven_days_ago = today - timedelta(days=6)
+    seven_day_tasks = Task.objects.filter(
+        property=property_obj,
+        scheduled_date__range=(
+            seven_days_ago,
+            today,
+        ),
+    ).exclude(
+        status=Task.Status.CANCELLED,
+    )
+    seven_day_task_count = seven_day_tasks.count()
+    seven_day_completed_tasks = seven_day_tasks.filter(
+        status=Task.Status.COMPLETED,
+    )
+    seven_day_completed_count = (
+        seven_day_completed_tasks.count()
+    )
+    if seven_day_task_count:
+        seven_day_completion_rate = round(
+            (
+                seven_day_completed_count
+                / seven_day_task_count
+            )
+            * 100
+        )
+    else:
+        seven_day_completion_rate = 0
+    seven_day_issues_reported = (
+        Issue.objects
+        .filter(
+            property=property_obj,
+            reported_at__date__range=(
+                seven_days_ago,
+                today,
+            ),
+        )
+        .count()
+    )
+    seven_day_issues_resolved = (
+        Issue.objects
+        .filter(
+            property=property_obj,
+            resolved_at__date__range=(
+                seven_days_ago,
+                today,
+            ),
+        )
+        .count()
+    )
+    seven_day_checklists_completed = (
+        ChecklistRun.objects
+        .filter(
+            checklist__property=property_obj,
+            completed_at__date__range=(
+                seven_days_ago,
+                today,
+            ),
+        )
+        .count()
+    )
+    seven_day_activity = []
+    for day_offset in range(7):
+        day = seven_days_ago + timedelta(
+            days=day_offset
+        )
+        completed_tasks = (
+            seven_day_completed_tasks
+            .filter(
+                completed_at__date=day,
+            )
+            .count()
+        )
+        issues_reported = (
+            Issue.objects
+            .filter(
+                property=property_obj,
+                reported_at__date=day,
+            )
+            .count()
+        )
+        issues_resolved = (
+            Issue.objects
+            .filter(
+                property=property_obj,
+                resolved_at__date=day,
+            )
+            .count()
+        )
+        checklists_completed = (
+            ChecklistRun.objects
+            .filter(
+                checklist__property=property_obj,
+                completed_at__date=day,
+            )
+            .count()
+        )
+        seven_day_activity.append(
+            {
+                "date": day,
+                "completed_tasks": completed_tasks,
+                "issues_reported": issues_reported,
+                "issues_resolved": issues_resolved,
+                "checklists_completed": (
+                    checklists_completed
+                ),
+            }
+        )
     tasks = (
         Task.objects
         .filter(property=property_obj)
@@ -60,8 +167,14 @@ def dashboard(request, property_slug):
     tasks_today = open_tasks.filter(
         due_at__date=today,
     )
-    overdue_tasks = open_tasks.filter(
-        due_at__lt=now,
+    overdue_tasks = Task.objects.filter(
+        property=property_obj,
+        due_at__lt=timezone.now(),
+    ).exclude(
+        status__in=[
+            Task.Status.COMPLETED,
+            Task.Status.CANCELLED,
+        ]
     )
     issues = (
         Issue.objects
@@ -74,6 +187,21 @@ def dashboard(request, property_slug):
             Issue.Status.CLOSED,
         ]
     )
+    today_tasks = Task.objects.filter(
+        property=property_obj,
+        scheduled_date=today,
+    )
+    today_completed_tasks = today_tasks.filter(
+        status=Task.Status.COMPLETED,
+    )
+    today_task_count = today_tasks.count()
+    today_completed_count = today_completed_tasks.count()
+    if today_task_count:
+        task_completion_rate = round(
+            (today_completed_count / today_task_count) * 100
+        )
+    else:
+        task_completion_rate = 0
     recent_completed_tasks = (
         Task.objects
         .filter(
@@ -83,7 +211,36 @@ def dashboard(request, property_slug):
         .select_related("assigned_to")
         .order_by("-completed_at")[:5]
     )
-
+    open_issue_counts = {
+        "urgent": open_issues.filter(
+            priority=Issue.Priority.URGENT
+        ).count(),
+        "high": open_issues.filter(
+            priority=Issue.Priority.HIGH
+        ).count(),
+        "medium": open_issues.filter(
+            priority=Issue.Priority.MEDIUM
+        ).count(),
+        "low": open_issues.filter(
+            priority=Issue.Priority.LOW
+        ).count(),
+    }
+    completed_checklists_today = (
+        ChecklistRun.objects
+        .filter(
+            checklist__property=property_obj,
+            completed_at__date=today,
+        )
+        .count()
+    )
+    active_handover_count = (
+        HandoverNote.objects
+        .filter(
+            property=property_obj,
+            is_resolved=False,
+        )
+        .count()
+    )
     recent_resolved_issues = (
         Issue.objects
         .filter(
@@ -120,6 +277,235 @@ def dashboard(request, property_slug):
             priority=Issue.Priority.URGENT,
         ).count()
     )
+    overdue_by_category = {
+        value: overdue_tasks.filter(
+            category=value
+        ).count()
+        for value, label in Task.Category.choices
+    }
+    overdue_task_details = []
+    for task in overdue_tasks.select_related(
+        "assigned_to"
+    ).order_by("due_at")[:8]:
+        overdue_hours = None
+        overdue_days = None
+        if task.due_at:
+            overdue_delta = (
+                timezone.now() - task.due_at
+            )
+            overdue_hours = int(
+                overdue_delta.total_seconds() // 3600
+            )
+            overdue_days = overdue_delta.days
+        overdue_task_details.append(
+            {
+                "task": task,
+                "overdue_hours": overdue_hours,
+                "overdue_days": overdue_days,
+            }
+        )
+    top_overdue_category = None
+    top_overdue_count = 0
+    for value, label in Task.Category.choices:
+        count = overdue_by_category.get(
+            value,
+            0,
+        )
+        if count > top_overdue_count:
+            top_overdue_count = count
+            top_overdue_category = label
+    department_workload = []
+    for value, label in Task.Category.choices:
+        open_task_count = (
+            Task.objects
+            .filter(
+                property=property_obj,
+                category=value,
+            )
+            .exclude(
+                status__in=[
+                    Task.Status.COMPLETED,
+                    Task.Status.CANCELLED,
+                ]
+            )
+            .count()
+        )
+        overdue_task_count = (
+            overdue_tasks
+            .filter(
+                category=value,
+            )
+            .count()
+        )
+        open_issue_count = (
+            open_issues
+            .filter(
+                category=value,
+            )
+            .count()
+        )
+        total_pressure = (
+            open_task_count
+            + overdue_task_count
+            + open_issue_count
+        )
+        department_workload.append(
+            {
+                "value": value,
+                "label": label,
+                "open_tasks": open_task_count,
+                "overdue_tasks": overdue_task_count,
+                "open_issues": open_issue_count,
+                "total_pressure": total_pressure,
+            }
+        )
+    department_workload.sort(
+        key=lambda department: department["total_pressure"],
+        reverse=True,
+    )
+    staff_workload = []
+    memberships = (
+        PropertyMembership.objects
+        .filter(
+            property=property_obj,
+            is_active=True,
+        )
+        .select_related("user")
+    )
+    for membership in memberships:
+        user = membership.user
+        open_task_count = (
+            Task.objects
+            .filter(
+                property=property_obj,
+                assigned_to=user,
+            )
+            .exclude(
+                status__in=[
+                    Task.Status.COMPLETED,
+                    Task.Status.CANCELLED,
+                ]
+            )
+            .count()
+        )
+        overdue_task_count = (
+            overdue_tasks
+            .filter(
+                assigned_to=user,
+            )
+            .count()
+        )
+        open_issue_count = (
+            open_issues
+            .filter(
+                assigned_to=user,
+            )
+            .count()
+        )
+        total_workload = (
+            open_task_count
+            + open_issue_count
+        )
+        staff_workload.append(
+        {
+            "user": user,
+            "membership": membership,
+            "open_tasks": open_task_count,
+            "overdue_tasks": overdue_task_count,
+            "open_issues": open_issue_count,
+            "total_workload": total_workload,
+            "task_preview": (
+                Task.objects
+                .filter(
+                    property=property_obj,
+                    assigned_to=user,
+                )
+                .exclude(
+                    status__in=[
+                        Task.Status.COMPLETED,
+                        Task.Status.CANCELLED,
+                    ]
+                )
+                .order_by(
+                    "due_at",
+                    "-priority",
+                )[:3]
+            ),
+            "issue_preview": (
+                open_issues
+                .filter(
+                    assigned_to=user,
+                )
+                .order_by(
+                    "-priority",
+                    "reported_at",
+                )[:2]
+            ),
+        }
+    )
+    staff_workload.sort(
+        key=lambda staff: (
+            staff["overdue_tasks"],
+            staff["total_workload"],
+        ),
+        reverse=True,
+    )
+    unassigned_tasks = (
+        Task.objects
+        .filter(
+            property=property_obj,
+            assigned_to__isnull=True,
+        )
+        .exclude(
+            status__in=[
+                Task.Status.COMPLETED,
+                Task.Status.CANCELLED,
+            ]
+        )
+        .count()
+    )
+    unassigned_issues = (
+        open_issues
+        .filter(
+            assigned_to__isnull=True,
+        )
+        .count()
+    )
+    unassigned_work = (
+        unassigned_tasks
+        + unassigned_issues
+    )
+    unassigned_task_preview = (
+        Task.objects
+        .filter(
+            property=property_obj,
+            assigned_to__isnull=True,
+        )
+        .exclude(
+            status__in=[
+                Task.Status.COMPLETED,
+                Task.Status.CANCELLED,
+            ]
+        )
+        .order_by("due_at")[:5]
+    )
+    unassigned_issue_preview = (
+        open_issues
+        .filter(
+            assigned_to__isnull=True,
+        )
+        .order_by("-reported_at")[:5]
+    )
+    department_workload_dashboard = [
+        department
+        for department in department_workload
+        if department["total_pressure"] > 0
+    ][:6]
+    staff_workload_dashboard = [
+        staff
+        for staff in staff_workload
+        if staff["total_workload"] > 0
+    ][:6]
     recent_issues = open_issues.order_by(
         "-reported_at"
     )[:5]
@@ -133,6 +519,39 @@ def dashboard(request, property_slug):
         "urgent_items": urgent_items,
         "active_page": "dashboard",
         "recent_activity": recent_activity,
+        "today_task_count": today_task_count,
+        "today_completed_count": today_completed_count,
+        "task_completion_rate": task_completion_rate,
+        "open_issue_counts": open_issue_counts,
+        "completed_checklists_today": completed_checklists_today,
+        "active_handover_count": active_handover_count,
+        "seven_day_task_count": seven_day_task_count,
+        "seven_day_completed_count": seven_day_completed_count,
+        "seven_day_completion_rate": seven_day_completion_rate,
+        "seven_day_issues_reported": seven_day_issues_reported,
+        "seven_day_issues_resolved": seven_day_issues_resolved,
+        "seven_day_checklists_completed": (
+            seven_day_checklists_completed
+        ),
+        "seven_day_activity": seven_day_activity,
+        "overdue_by_category": overdue_by_category,
+        "overdue_task_details": overdue_task_details,
+        "top_overdue_category": top_overdue_category,
+        "top_overdue_count": top_overdue_count,
+        "department_workload": department_workload,
+        "staff_workload": staff_workload,
+        "unassigned_tasks": unassigned_tasks,
+        "unassigned_issues": unassigned_issues,
+        "unassigned_work": unassigned_work,
+        "department_workload_dashboard": (
+            department_workload_dashboard
+        ),
+        "staff_workload_dashboard": (
+            staff_workload_dashboard
+        ),
+        "unassigned_task_preview": unassigned_task_preview,
+        "unassigned_issue_preview": unassigned_issue_preview,
+        "active_memberships": memberships,
     }
     return render(
         request,
@@ -1308,4 +1727,118 @@ def activity_list(request, property_slug):
         request,
         "operations/activity_list.html",
         context,
+    )
+@login_required
+def task_quick_assign(
+    request,
+    property_slug,
+    task_pk,
+):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    task = get_object_or_404(
+        Task,
+        pk=task_pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        membership_id = request.POST.get(
+            "membership_id"
+        )
+        previous_assignee_id = task.assigned_to_id
+        if membership_id:
+            membership = get_object_or_404(
+                PropertyMembership,
+                pk=membership_id,
+                property=property_obj,
+                is_active=True,
+            )
+            task.assigned_to = membership.user
+            assigned_name = (
+                membership.user.get_full_name()
+                or membership.user.username
+            )
+        else:
+            task.assigned_to = None
+            assigned_name = "Unassigned"
+        task.save(
+            update_fields=[
+                "assigned_to",
+                "updated_at",
+            ]
+        )
+        if task.assigned_to:
+            detail = f"Assigned to {assigned_name}"
+        else:
+            detail = "Moved to unassigned work"
+        if previous_assignee_id != task.assigned_to_id:
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.TASK_ASSIGNED,
+                title=task.title,
+                user=request.user,
+                detail=detail,
+            )
+    return redirect(
+        "operations:dashboard",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def issue_quick_assign(
+    request,
+    property_slug,
+    issue_pk,
+):
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
+    )
+    issue = get_object_or_404(
+        Issue,
+        pk=issue_pk,
+        property=property_obj,
+    )
+    if request.method == "POST":
+        membership_id = request.POST.get(
+            "membership_id"
+        )
+        previous_assignee_id = issue.assigned_to_id
+        if membership_id:
+            membership = get_object_or_404(
+                PropertyMembership,
+                pk=membership_id,
+                property=property_obj,
+                is_active=True,
+            )
+            issue.assigned_to = membership.user
+            assigned_name = (
+                membership.user.get_full_name()
+                or membership.user.username
+            )
+        else:
+            issue.assigned_to = None
+            assigned_name = "Unassigned"
+        issue.save(
+            update_fields=[
+                "assigned_to",
+                "updated_at",
+            ]
+        )
+        if issue.assigned_to:
+            detail = f"Assigned to {assigned_name}"
+        else:
+            detail = "Moved to unassigned work"
+        if previous_assignee_id != issue.assigned_to_id:
+            log_activity(
+                property_obj=property_obj,
+                event_type=ActivityLog.EventType.ISSUE_ASSIGNED,
+                title=issue.title,
+                user=request.user,
+                detail=detail,
+            )
+    return redirect(
+        "operations:dashboard",
+        property_slug=property_obj.slug,
     )

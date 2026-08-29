@@ -178,4 +178,14 @@ urlpatterns = [
         views.activity_list,
         name="activity_list",
     ),
+    path(
+        "p/<slug:property_slug>/tasks/<int:task_pk>/assign/",
+        views.task_quick_assign,
+        name="task_quick_assign",
+    ),
+    path(
+        "p/<slug:property_slug>/issues/<int:issue_pk>/assign/",
+        views.issue_quick_assign,
+        name="issue_quick_assign",
+    ),
 ]
