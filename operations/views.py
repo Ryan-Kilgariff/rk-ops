@@ -6,16 +6,18 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
+from django.utils.text import slugify
+from properties.forms import PropertyForm
 from .notifications import create_notification
 from .services import (
     generate_recurring_tasks_for_date,
     update_task_escalations,
 )
 from accounts.forms import (
+    OrganisationInvitationForm,
     MembershipEditForm,
     TeamMemberCreateForm,
 )
-from accounts.models import PropertyMembership
 from properties.models import Property
 from .forms import (
     ChecklistForm,
@@ -37,9 +39,16 @@ from .models import (
     Notification,
     RecurringTask
 )
+from accounts.models import (
+    OrganisationInvitation,
+    OrganisationMembership,
+    PropertyMembership,
+)
 from .utils import (
+    get_organisation_for_user,
     get_property_for_user,
     require_management_access,
+    require_organisation_management_access,
     require_supervisory_access,
 )
 from datetime import datetime, timedelta
@@ -596,37 +605,56 @@ def dashboard(request, property_slug):
     )
 @login_required
 def property_home(request):
+    # --------------------------------------------------
+    # SUPERUSER
+    # --------------------------------------------------
     if request.user.is_superuser:
         property_obj = (
             Property.objects
-            .filter(is_active=True)
+            .filter(
+                is_active=True,
+                organisation__is_active=True,
+            )
+            .select_related("organisation")
             .order_by("name")
             .first()
         )
-    else:
-        membership = (
-            PropertyMembership.objects
-            .filter(
-                user=request.user,
-                is_active=True,
-                property__is_active=True,
+        if not property_obj:
+            raise PermissionDenied(
+                "No active properties are available."
             )
-            .select_related("property")
-            .order_by("property__name")
-            .first()
+        return redirect(
+            "operations:dashboard",
+            property_slug=property_obj.slug,
         )
-        property_obj = (
-            membership.property
-            if membership
-            else None
+    # --------------------------------------------------
+    # NORMAL USER
+    # --------------------------------------------------
+    memberships = (
+        PropertyMembership.objects
+        .filter(
+            user=request.user,
+            is_active=True,
+            property__is_active=True,
+            property__organisation__is_active=True,
+            property__organisation__memberships__user=request.user,
+            property__organisation__memberships__is_active=True,
         )
-    if not property_obj:
+        .select_related(
+            "property",
+            "property__organisation",
+        )
+        .distinct()
+        .order_by("property__name")
+    )
+    membership = memberships.first()
+    if not membership:
         raise PermissionDenied(
-            "You do not have access to an active property."
+            "You do not currently have access to any property."
         )
     return redirect(
         "operations:dashboard",
-        property_slug=property_obj.slug,
+        property_slug=membership.property.slug,
     )
 @login_required
 def task_list(request, property_slug):
@@ -2007,4 +2035,259 @@ def notification_open(
     return redirect(
         "operations:notification_list",
         property_slug=property_obj.slug,
+    )
+@login_required
+def organisation_account(
+    request,
+    organisation_slug,
+):
+    organisation, membership = (
+        get_organisation_for_user(
+            request.user,
+            organisation_slug,
+        )
+    )
+    pending_invitations = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+            accepted_at__isnull=True,
+        )
+        .order_by("-created_at")
+    )
+    properties = (
+        organisation.properties
+        .filter(is_active=True)
+        .order_by("name")
+    )
+    organisation_memberships = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+        )
+        .select_related("user")
+        .order_by(
+            "role",
+            "user__username",
+        )
+    )
+    current_property = properties.first()
+    context = {
+        "organisation": organisation,
+        "organisation_membership": membership,
+        "property": current_property,
+        "organisation_properties": properties,
+        "organisation_memberships": organisation_memberships,
+        "property_count": properties.count(),
+        "active_page": "account",
+        "pending_invitations": pending_invitations,
+    }
+    return render(
+        request,
+        "operations/organisation_account.html",
+        context,
+    )
+@login_required
+def organisation_property_create(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    current_property = (
+        organisation.properties
+        .filter(is_active=True)
+        .order_by("name")
+        .first()
+    )
+    if request.method == "POST":
+        form = PropertyForm(
+            request.POST,
+        )
+        if form.is_valid():
+            property_obj = form.save(
+                commit=False
+            )
+            property_obj.organisation = (
+                organisation
+            )
+            base_slug = slugify(
+                property_obj.name
+            )
+            slug = base_slug
+            counter = 2
+            while Property.objects.filter(
+                slug=slug
+            ).exists():
+                slug = (
+                    f"{base_slug}-{counter}"
+                )
+                counter += 1
+            property_obj.slug = slug
+            property_obj.save()
+            # Give the creator management access
+            # to the new property.
+            PropertyMembership.objects.get_or_create(
+                property=property_obj,
+                user=request.user,
+                defaults={
+                    "role": PropertyMembership.Role.OWNER,
+                    "is_active": True,
+                },
+            )
+            return redirect(
+                "operations:dashboard",
+                property_slug=property_obj.slug,
+            )
+    else:
+        form = PropertyForm()
+    context = {
+        "organisation": organisation,
+        "property": current_property,
+        "form": form,
+        "active_page": "account",
+    }
+    return render(
+        request,
+        "operations/organisation_property_form.html",
+        context,
+    )
+@login_required
+def organisation_invite_member(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    current_property = (
+        organisation.properties
+        .filter(is_active=True)
+        .order_by("name")
+        .first()
+    )
+    if request.method == "POST":
+        form = OrganisationInvitationForm(
+            request.POST,
+            organisation=organisation,
+        )
+        if form.is_valid():
+            invitation = form.save(
+                commit=False
+            )
+            invitation.organisation = (
+                organisation
+            )
+            invitation.invited_by = (
+                request.user
+            )
+            invitation.save()
+            form.save_m2m()
+            return redirect(
+                "operations:organisation_account",
+                organisation_slug=organisation.slug,
+            )
+    else:
+        form = OrganisationInvitationForm(
+            organisation=organisation,
+        )
+    return render(
+        request,
+        "operations/organisation_invitation_form.html",
+        {
+            "organisation": organisation,
+            "property": current_property,
+            "form": form,
+            "active_page": "account",
+        },
+    )
+@login_required
+def organisation_invitation_accept(
+    request,
+    token,
+):
+    invitation = get_object_or_404(
+        OrganisationInvitation.objects.select_related(
+            "organisation",
+        ),
+        token=token,
+        is_active=True,
+        accepted_at__isnull=True,
+    )
+    user_email = (
+        request.user.email
+        or ""
+    ).strip().lower()
+    invitation_email = (
+        invitation.email
+        or ""
+    ).strip().lower()
+    if user_email != invitation_email:
+        raise PermissionDenied(
+            "This invitation belongs to a different email address."
+        )
+    if request.method == "POST":
+        membership, created = (
+            OrganisationMembership.objects.get_or_create(
+                organisation=invitation.organisation,
+                user=request.user,
+                defaults={
+                    "role": invitation.role,
+                    "is_active": True,
+                },
+            )
+        )
+        for property_obj in invitation.properties.all():
+            PropertyMembership.objects.update_or_create(
+                property=property_obj,
+                user=request.user,
+                defaults={
+                    "role": invitation.property_role,
+                    "is_active": True,
+                },
+            )
+        if not created:
+            membership.role = invitation.role
+            membership.is_active = True
+            membership.save(
+                update_fields=[
+                    "role",
+                    "is_active",
+                ]
+            )
+        invitation.accepted_at = timezone.now()
+        invitation.is_active = False
+        invitation.save(
+            update_fields=[
+                "accepted_at",
+                "is_active",
+            ]
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=invitation.organisation.slug,
+        )
+    current_property = (
+        invitation.organisation.properties
+        .filter(is_active=True)
+        .order_by("name")
+        .first()
+    )
+    return render(
+        request,
+        "operations/organisation_invitation_accept.html",
+        {
+            "invitation": invitation,
+            "organisation": invitation.organisation,
+            "property": current_property,
+        },
     )

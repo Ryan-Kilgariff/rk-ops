@@ -1,0 +1,118 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Accept Invitation
+{% endblock %}
+{% block topbar_title %}
+Invitation
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Organisation Invitation
+</p>
+<h1 class="page-title">
+    Join {{ organisation.name }}
+</h1>
+<p class="page-subtitle">
+    You have been invited to join this organisation on RK Ops.
+</p>
+<section class="section">
+    <div class="invitation-card">
+        <div class="invitation-row">
+            <span>
+                Organisation
+            </span>
+            <strong>
+                {{ organisation.name }}
+            </strong>
+        </div>
+        <div class="invitation-row">
+            <span>
+                Email
+            </span>
+            <strong>
+                {{ invitation.email }}
+            </strong>
+        </div>
+        <div class="invitation-row">
+            <span>
+                Role
+            </span>
+            <strong>
+                {{ invitation.get_role_display }}
+            </strong>
+        </div>
+        {% if invitation.invited_by %}
+            <div class="invitation-row">
+                <span>
+                    Invited by
+                </span>
+                <strong>
+                    {% if invitation.invited_by.get_full_name %}
+                        {{ invitation.invited_by.get_full_name }}
+                    {% else %}
+                        {{ invitation.invited_by.username }}
+                    {% endif %}
+                </strong>
+            </div>
+        {% endif %}
+        <div class="invitation-row">
+            <span>
+                Property role
+            </span>
+            <strong>
+                {{ invitation.get_property_role_display }}
+            </strong>
+        </div>
+        <div class="invitation-row">
+            <span>
+                Property access
+            </span>
+            <strong>
+                {% for property_item in invitation.properties.all %}
+                    {{ property_item.name }}{% if not forloop.last %}, {% endif %}
+                {% empty %}
+                    No property access
+                {% endfor %}
+            </strong>
+        </div>
+        <form
+            method="post"
+            class="invitation-actions"
+        >
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="button"
+            >
+                Accept Invitation
+            </button>
+        </form>
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.invitation-card {
+    max-width: 620px;
+    padding: 24px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+.invitation-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 14px 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+.invitation-row span {
+    color: #6b7280;
+}
+.invitation-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 24px;
+}
+</style>
+{% endblock %}

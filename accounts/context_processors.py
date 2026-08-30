@@ -27,7 +27,11 @@ def rk_ops_permissions(request):
     if request.user.is_superuser:
         accessible_properties = list(
             Property.objects
-            .filter(is_active=True)
+            .filter(
+                is_active=True,
+                organisation__is_active=True,
+            )
+            .select_related("organisation")
             .order_by("name")
         )
         if property_slug:
@@ -77,8 +81,15 @@ def rk_ops_permissions(request):
             user=request.user,
             is_active=True,
             property__is_active=True,
+            property__organisation__is_active=True,
+            property__organisation__memberships__user=request.user,
+            property__organisation__memberships__is_active=True,
         )
-        .select_related("property")
+        .select_related(
+            "property",
+            "property__organisation",
+        )
+        .distinct()
         .order_by("property__name")
     )
     accessible_properties = [

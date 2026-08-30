@@ -208,4 +208,24 @@ urlpatterns = [
         views.notification_open,
         name="notification_open",
     ),
+    path(
+        "account/<slug:organisation_slug>/",
+        views.organisation_account,
+        name="organisation_account",
+    ),
+    path(
+        "account/<slug:organisation_slug>/properties/new/",
+        views.organisation_property_create,
+        name="organisation_property_create",
+    ),
+    path(
+        "account/<slug:organisation_slug>/members/invite/",
+        views.organisation_invite_member,
+        name="organisation_invite_member",
+    ),
+    path(
+        "invitations/<uuid:token>/accept/",
+        views.organisation_invitation_accept,
+        name="organisation_invitation_accept",
+    ),
 ]

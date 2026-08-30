@@ -1,9 +1,37 @@
 from django.contrib import admin
 from .models import PropertyMembership
 from .models import (
+    OrganisationInvitation,
     OrganisationMembership,
     PropertyMembership,
 )
+@admin.register(OrganisationInvitation)
+class OrganisationInvitationAdmin(
+    admin.ModelAdmin
+):
+    list_display = (
+        "email",
+        "organisation",
+        "role",
+        "invited_by",
+        "is_active",
+        "accepted_at",
+        "created_at",
+    )
+    list_filter = (
+        "organisation",
+        "role",
+        "is_active",
+    )
+    search_fields = (
+        "email",
+        "organisation__name",
+    )
+    readonly_fields = (
+        "token",
+        "created_at",
+        "accepted_at",
+    )
 @admin.register(PropertyMembership)
 class PropertyMembershipAdmin(admin.ModelAdmin):
     list_display = (

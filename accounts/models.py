@@ -1,6 +1,79 @@
 from django.conf import settings
 from django.db import models
 from properties.models import Property
+import uuid
+class OrganisationInvitation(models.Model):
+    class Role(models.TextChoices):
+        ADMIN = "admin", "Administrator"
+        MEMBER = "member", "Member"
+    class PropertyRole(models.TextChoices):
+        OWNER = "owner", "Owner / Admin"
+        MANAGER = "manager", "Manager"
+        SUPERVISOR = "supervisor", "Supervisor"
+        TEAM_MEMBER = "team_member", "Team Member"
+    property_role = models.CharField(
+        max_length=20,
+        choices=PropertyRole.choices,
+        default=PropertyRole.TEAM_MEMBER,
+    )
+    properties = models.ManyToManyField(
+        "properties.Property",
+        blank=True,
+        related_name="organisation_invitations",
+    )
+    organisation = models.ForeignKey(
+        "properties.Organisation",
+        on_delete=models.CASCADE,
+        related_name="invitations",
+    )
+    email = models.EmailField()
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+        default=Role.MEMBER,
+    )
+    token = models.UUIDField(
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_organisation_invitations",
+    )
+    accepted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    is_active = models.BooleanField(
+        default=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "organisation",
+                    "email",
+                ],
+                condition=models.Q(
+                    is_active=True,
+                    accepted_at__isnull=True,
+                ),
+                name="unique_active_organisation_invitation",
+            ),
+        ]
+    def __str__(self):
+        return (
+            f"{self.email} → "
+            f"{self.organisation.name}"
+        )
 class PropertyMembership(models.Model):
     class Role(models.TextChoices):
         OWNER = "owner", "Owner / Admin"

@@ -41,8 +41,6 @@ class Property(models.Model):
         Organisation,
         on_delete=models.PROTECT,
         related_name="properties",
-        null=True,
-        blank=True,
     )
     class Meta:
         verbose_name_plural = "Properties"

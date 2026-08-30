@@ -1,0 +1,166 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Invite Member
+{% endblock %}
+{% block topbar_title %}
+Invite Member
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Organisation
+</p>
+<h1 class="page-title">
+    Invite Member
+</h1>
+<p class="page-subtitle">
+    Invite someone to {{ organisation.name }}.
+</p>
+<section class="section">
+    <form
+        method="post"
+        class="form-card"
+    >
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="{{ form.email.id_for_label }}">
+                Email address
+            </label>
+            {{ form.email }}
+            {{ form.email.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ form.role.id_for_label }}">
+                Organisation role
+            </label>
+            {{ form.role }}
+            {{ form.role.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ form.property_role.id_for_label }}">
+                Property role
+            </label>
+            {{ form.property_role }}
+            {{ form.property_role.errors }}
+        </div>
+        <div class="form-group">
+            <label>
+                Property access
+            </label>
+            <div class="property-choice-list">
+                {{ form.properties }}
+            </div>
+            {{ form.properties.errors }}
+        </div>
+        <div class="form-actions">
+            <a
+                href="{% url 'operations:organisation_account' organisation.slug %}"
+                class="button secondary-action"
+            >
+                Cancel
+            </a>
+            <button
+                type="submit"
+                class="button"
+            >
+                Create Invitation
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.form-card {
+    max-width: 720px;
+    padding: 24px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+.form-group {
+    margin-bottom: 18px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+}
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    color: #111827;
+    font: inherit;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+.form-control:focus {
+    outline: none;
+    border-color: #9ca3af;
+    box-shadow:
+        0 0 0 3px
+        rgba(17, 24, 39, 0.05);
+}
+.property-choice-list {
+    padding: 14px 16px;
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+}
+.property-choice-list ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.property-choice-list li {
+    margin-bottom: 10px;
+}
+.property-choice-list li:last-child {
+    margin-bottom: 0;
+}
+.property-choice-list label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+.property-choice-list input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    cursor: pointer;
+}
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+}
+.form-errors,
+.errorlist {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    color: #b91c1c;
+    font-size: 13px;
+}
+@media (max-width: 650px) {
+    .form-card {
+        padding: 18px;
+    }
+    .form-actions {
+        flex-direction: column-reverse;
+    }
+    .form-actions .button {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}

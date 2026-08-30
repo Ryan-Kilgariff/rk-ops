@@ -1,0 +1,157 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Add Property
+{% endblock %}
+{% block topbar_title %}
+Add Property
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Organisation
+</p>
+<h1 class="page-title">
+    Add Property
+</h1>
+<p class="page-subtitle">
+    Add a property to {{ organisation.name }}.
+</p>
+<section class="section">
+    <form
+        method="post"
+        class="form-card"
+    >
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+        <div class="form-group">
+            <label for="{{ form.name.id_for_label }}">
+                Property name
+            </label>
+            {{ form.name }}
+            {{ form.name.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ form.address_line_1.id_for_label }}">
+                Address line 1
+            </label>
+            {{ form.address_line_1 }}
+            {{ form.address_line_1.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ form.address_line_2.id_for_label }}">
+                Address line 2
+            </label>
+            {{ form.address_line_2 }}
+            {{ form.address_line_2.errors }}
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="{{ form.town_city.id_for_label }}">
+                    Town / City
+                </label>
+                {{ form.town_city }}
+                {{ form.town_city.errors }}
+            </div>
+            <div class="form-group">
+                <label for="{{ form.postcode.id_for_label }}">
+                    Postcode
+                </label>
+                {{ form.postcode }}
+                {{ form.postcode.errors }}
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="{{ form.phone.id_for_label }}">
+                    Phone
+                </label>
+                {{ form.phone }}
+                {{ form.phone.errors }}
+            </div>
+            <div class="form-group">
+                <label for="{{ form.email.id_for_label }}">
+                    Email
+                </label>
+                {{ form.email }}
+                {{ form.email.errors }}
+            </div>
+        </div>
+        <div class="form-group checkbox-group">
+            {{ form.is_active }}
+            <label for="{{ form.is_active.id_for_label }}">
+                Property active
+            </label>
+        </div>
+        <div class="form-actions">
+            <a
+                href="{% url 'operations:organisation_account' organisation.slug %}"
+                class="button secondary-action"
+            >
+                Cancel
+            </a>
+            <button
+                type="submit"
+                class="button"
+            >
+                Create Property
+            </button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.form-card {
+    max-width: 760px;
+    padding: 24px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+.form-group {
+    margin-bottom: 18px;
+}
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 700;
+}
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font: inherit;
+    box-sizing: border-box;
+}
+.form-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.checkbox-group label {
+    margin: 0;
+}
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 24px;
+}
+@media (max-width: 650px) {
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+</style>
+{% endblock %}

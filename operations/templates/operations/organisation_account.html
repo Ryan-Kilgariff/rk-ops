@@ -1,0 +1,334 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Account
+{% endblock %}
+{% block topbar_title %}
+Account
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Organisation
+</p>
+<h1 class="page-title">
+    {{ organisation.name }}
+</h1>
+<p class="page-subtitle">
+    Manage your RK Ops organisation and properties.
+</p>
+<section class="account-stats">
+    <article class="account-stat-card">
+        <div class="account-stat-label">
+            Properties
+        </div>
+        <div class="account-stat-value">
+            {{ property_count }}
+        </div>
+    </article>
+    <article class="account-stat-card">
+        <div class="account-stat-label">
+            Organisation Status
+        </div>
+        <div class="account-stat-text">
+            {% if organisation.is_active %}
+                Active
+            {% else %}
+                Inactive
+            {% endif %}
+        </div>
+    </article>
+    <article class="account-stat-card">
+        <div class="account-stat-label">
+            Your Role
+        </div>
+        <div class="account-stat-text">
+            {% if request.user.is_superuser %}
+                Superuser
+            {% elif organisation_membership %}
+                {{ organisation_membership.get_role_display }}
+            {% else %}
+                —
+            {% endif %}
+        </div>
+    </article>
+    <article class="account-stat-card">
+        <div class="account-stat-label">
+            Plan
+        </div>
+        <div class="account-stat-text">
+            Founder Beta
+        </div>
+        <div class="task-meta">
+            Billing integration coming later
+        </div>
+    </article>
+</section>
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Properties
+            </h2>
+            <div class="task-meta">
+                Properties connected to this organisation
+            </div>
+        </div>
+        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+            <a
+                href="{% url 'operations:organisation_property_create' organisation.slug %}"
+                class="button"
+            >
+                + Add Property
+            </a>
+        {% endif %}
+    </div>
+    <div class="account-list">
+        {% for property_item in organisation_properties %}
+            <a
+                href="{% url 'operations:dashboard' property_item.slug %}"
+                class="account-list-item"
+            >
+                <div>
+                    <strong>
+                        {{ property_item.name }}
+                    </strong>
+                    <div class="task-meta">
+                        {% if property_item.town_city %}
+                            {{ property_item.town_city }}
+                        {% endif %}
+                        {% if property_item.postcode %}
+                            · {{ property_item.postcode }}
+                        {% endif %}
+                    </div>
+                </div>
+                <span class="account-arrow">
+                    →
+                </span>
+            </a>
+        {% empty %}
+            <div class="empty-state">
+                No active properties.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Organisation Members
+            </h2>
+            <div class="task-meta">
+                People with access to this organisation
+            </div>
+        </div>
+        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+            <a
+                href="{% url 'operations:organisation_invite_member' organisation.slug %}"
+                class="button"
+            >
+                + Invite Member
+            </a>
+        {% endif %}
+    </div>
+    {% if pending_invitations %}
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        Pending Invitations
+                    </h2>
+                    <div class="task-meta">
+                        Invitations waiting to be accepted
+                    </div>
+                </div>
+            </div>
+            <div class="account-list">
+                {% for invitation in pending_invitations %}
+                    <div class="account-list-item">
+                        <div>
+                            <strong>
+                                {{ invitation.email }}
+                            </strong>
+                            <div class="task-meta">
+                                {{ invitation.get_role_display }}
+                                ·
+                                Invited
+                                {{ invitation.created_at|date:"d M Y" }}
+                            </div>
+                        </div>
+                        <a
+                            href="{% url 'operations:organisation_invitation_accept' invitation.token %}"
+                            class="button secondary-action"
+                        >
+                            Test link
+                        </a>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+    <div class="account-list">
+        {% for member in organisation_memberships %}
+            <div class="account-list-item">
+                <div>
+                    <strong>
+                        {% if member.user.get_full_name %}
+                            {{ member.user.get_full_name }}
+                        {% else %}
+                            {{ member.user.username }}
+                        {% endif %}
+                    </strong>
+                    <div class="task-meta">
+                        {{ member.user.email|default:"No email" }}
+                    </div>
+                </div>
+                <span class="account-role">
+                    {{ member.get_role_display }}
+                </span>
+            </div>
+        {% empty %}
+            <div class="empty-state">
+                No organisation members.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Subscription
+            </h2>
+            <div class="task-meta">
+                RK Ops plan and billing
+            </div>
+        </div>
+    </div>
+    <div class="subscription-card">
+        <div>
+            <div class="account-stat-label">
+                Current Plan
+            </div>
+            <div class="subscription-plan">
+                Founder Beta
+            </div>
+            <div class="task-meta">
+                Subscription management will be added
+                before commercial self-service launch.
+            </div>
+        </div>
+        <span class="status-badge">
+            Active
+        </span>
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.account-stats {
+    display: grid;
+    grid-template-columns:
+        repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 26px;
+}
+.account-stat-card {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 20px;
+}
+.account-stat-label {
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.account-stat-value {
+    margin-top: 8px;
+    font-size: 30px;
+    font-weight: 700;
+}
+.account-stat-text {
+    margin-top: 9px;
+    font-size: 18px;
+    font-weight: 700;
+}
+.account-list {
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    overflow: hidden;
+}
+.account-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 16px 18px;
+    border-top: 1px solid #f3f4f6;
+    color: #111827;
+    text-decoration: none;
+}
+.account-list-item:first-child {
+    border-top: 0;
+}
+a.account-list-item:hover {
+    background: #f9fafb;
+}
+.account-arrow {
+    color: #6b7280;
+    font-size: 20px;
+}
+.account-role {
+    padding: 5px 9px;
+    background: #f3f4f6;
+    border-radius: 999px;
+    color: #4b5563;
+    font-size: 12px;
+    font-weight: 700;
+}
+.subscription-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 20px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+.subscription-plan {
+    margin: 7px 0 3px;
+    font-size: 22px;
+    font-weight: 700;
+}
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    background: #ecfdf5;
+    color: #047857;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+}
+@media (max-width: 1000px) {
+    .account-stats {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+}
+@media (max-width: 650px) {
+    .account-stats {
+        grid-template-columns: 1fr;
+    }
+    .subscription-card {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+</style>
+{% endblock %}

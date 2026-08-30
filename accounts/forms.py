@@ -1,7 +1,52 @@
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import UserCreationForm
-from .models import PropertyMembership
+from .models import (
+    OrganisationInvitation,
+    PropertyMembership,
+)
+class OrganisationInvitationForm(forms.ModelForm):
+    class Meta:
+        model = OrganisationInvitation
+        fields = [
+            "email",
+            "role",
+            "property_role",
+            "properties",
+        ]
+        widgets = {
+            "email": forms.EmailInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "name@example.com",
+                }
+            ),
+            "role": forms.Select(
+                attrs={"class": "form-control"}
+            ),
+            "property_role": forms.Select(
+                attrs={"class": "form-control"}
+            ),
+            "properties": forms.CheckboxSelectMultiple(),
+        }
+    def __init__(
+        self,
+        *args,
+        organisation=None,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs)
+        if organisation:
+            self.fields["properties"].queryset = (
+                organisation.properties
+                .filter(is_active=True)
+                .order_by("name")
+            )
+        else:
+            self.fields["properties"].queryset = (
+                self.fields["properties"]
+                .queryset.none()
+            )
 User = get_user_model()
 class TeamMemberCreateForm(UserCreationForm):
     email = forms.EmailField(

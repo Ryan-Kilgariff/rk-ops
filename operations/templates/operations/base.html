@@ -54,7 +54,7 @@
             gap: 7px;
         }
         .nav-link {
-            padding: 12px 14px;
+            padding: 10px 14px;
             border-radius: 8px;
             color: #d1d5db;
             font-size: 15px;
@@ -204,7 +204,12 @@
             color: #6b7280;
         }
         .property-switcher {
-            margin-bottom: 24px;
+            margin-bottom: 18px;
+        }
+        .nav-divider {
+            height: 1px;
+            background: #2b3442;
+            margin: 8px 0;
         }
         .property-select {
             width: 100%;
@@ -506,13 +511,22 @@
                 >
                     Team
                 </a>
-            {% endif %}    
+            {% endif %}   
+            <div class="nav-divider"></div> 
             <a
                 href="#"
                 class="nav-link"
             >
                 Settings
             </a>
+            {% if property and property.organisation %}
+                <a
+                    href="{% url 'operations:organisation_account' property.organisation.slug %}"
+                    class="nav-link {% if active_page == 'account' %}active{% endif %}"
+                >
+                    Account
+                </a>
+            {% endif %}
         </nav>
         <div class="sidebar-footer">
             RK Hospitality Studio
