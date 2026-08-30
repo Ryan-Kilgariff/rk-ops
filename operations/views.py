@@ -6,7 +6,11 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 import json
-from .services import generate_recurring_tasks_for_date
+from .notifications import create_notification
+from .services import (
+    generate_recurring_tasks_for_date,
+    update_task_escalations,
+)
 from accounts.forms import (
     MembershipEditForm,
     TeamMemberCreateForm,
@@ -30,6 +34,7 @@ from .models import (
     HandoverNote,
     Issue,
     Task,
+    Notification,
     RecurringTask
 )
 from .utils import (
@@ -268,6 +273,34 @@ def dashboard(request, property_slug):
         .select_related("user")
         .order_by("-created_at")[:8]
     )
+    escalated_tasks = (
+        Task.objects
+        .filter(
+            property=property_obj,
+        )
+        .exclude(
+            status__in=[
+                Task.Status.COMPLETED,
+                Task.Status.CANCELLED,
+            ]
+        )
+        .exclude(
+            escalation_level=(
+                Task.EscalationLevel.NONE
+            ),
+        )
+    )
+    watch_tasks = escalated_tasks.filter(
+        escalation_level=Task.EscalationLevel.WATCH,
+    ).count()
+    high_escalations = escalated_tasks.filter(
+        escalation_level=Task.EscalationLevel.HIGH,
+    ).count()
+    critical_escalations = escalated_tasks.filter(
+        escalation_level=(
+            Task.EscalationLevel.CRITICAL
+        ),
+    ).count()
     urgent_items = (
         open_tasks.filter(
             priority=Task.Priority.URGENT,
@@ -552,6 +585,9 @@ def dashboard(request, property_slug):
         "unassigned_task_preview": unassigned_task_preview,
         "unassigned_issue_preview": unassigned_issue_preview,
         "active_memberships": memberships,
+        "watch_tasks": watch_tasks,
+        "high_escalations": high_escalations,
+        "critical_escalations": critical_escalations,
     }
     return render(
         request,
@@ -1781,6 +1817,14 @@ def task_quick_assign(
                 user=request.user,
                 detail=detail,
             )
+            if task.assigned_to:
+                create_notification(
+                    property_obj=property_obj,
+                    recipient=task.assigned_to,
+                    title="Task assigned",
+                    message=task.title,
+                    task=task,
+                )
     return redirect(
         "operations:dashboard",
         property_slug=property_obj.slug,
@@ -1838,7 +1882,129 @@ def issue_quick_assign(
                 user=request.user,
                 detail=detail,
             )
+            if issue.assigned_to:
+                create_notification(
+                    property_obj=property_obj,
+                    recipient=issue.assigned_to,
+                    title="Issue assigned",
+                    message=issue.title,
+                    issue=issue
+                )
     return redirect(
         "operations:dashboard",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def notification_list(
+    request,
+    property_slug,
+):
+    property_obj, membership = (
+        get_property_for_user(
+            request.user,
+            property_slug,
+        )
+    )
+    notifications = (
+        Notification.objects
+        .filter(
+            property=property_obj,
+            recipient=request.user,
+        )
+        .order_by("-created_at")
+    )
+    return render(
+        request,
+        "operations/notification_list.html",
+        {
+            "property": property_obj,
+            "membership": membership,
+            "notifications": notifications,
+            "active_page": "notifications",
+        },
+    )
+@login_required
+def notification_mark_read(
+    request,
+    property_slug,
+    notification_pk,
+):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug,
+    )
+    notification = get_object_or_404(
+        Notification,
+        pk=notification_pk,
+        property=property_obj,
+        recipient=request.user,
+    )
+    if request.method == "POST":
+        notification.is_read = True
+        notification.save(
+            update_fields=["is_read"]
+        )
+    return redirect(
+        "operations:notification_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def notification_mark_all_read(
+    request,
+    property_slug,
+):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug,
+    )
+    if request.method == "POST":
+        (
+            Notification.objects
+            .filter(
+                property=property_obj,
+                recipient=request.user,
+                is_read=False,
+            )
+            .update(is_read=True)
+        )
+    return redirect(
+        "operations:notification_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def notification_open(
+    request,
+    property_slug,
+    notification_pk,
+):
+    property_obj, membership = get_property_for_user(
+        request.user,
+        property_slug,
+    )
+    notification = get_object_or_404(
+        Notification,
+        pk=notification_pk,
+        property=property_obj,
+        recipient=request.user,
+    )
+    if not notification.is_read:
+        notification.is_read = True
+        notification.save(
+            update_fields=["is_read"]
+        )
+    if notification.task:
+        return redirect(
+            "operations:task_edit",
+            property_slug=property_obj.slug,
+            pk=notification.task.pk,
+        )
+    if notification.issue:
+        return redirect(
+            "operations:issue_edit",
+            property_slug=property_obj.slug,
+            pk=notification.issue.pk,
+        )
+    return redirect(
+        "operations:notification_list",
         property_slug=property_obj.slug,
     )

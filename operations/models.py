@@ -19,6 +19,16 @@ class Task(models.Model):
         FOOD_BEVERAGE = "food_beverage", "Food & Beverage"
         MANAGEMENT = "management", "Management"
         OTHER = "other", "Other"
+    class EscalationLevel(models.TextChoices):
+        NONE = "none", "None"
+        WATCH = "watch", "Watch"
+        HIGH = "high", "High"
+        CRITICAL = "critical", "Critical"
+    escalation_level = models.CharField(
+        max_length=20,
+        choices=EscalationLevel.choices,
+        default=EscalationLevel.NONE,
+    )
     property = models.ForeignKey(
         Property,
         on_delete=models.CASCADE,
@@ -348,6 +358,8 @@ class ActivityLog(models.Model):
         HANDOVER_ADDED = "handover_added", "Handover note added"
         TEAM_MEMBER_ADDED = "team_member_added", "Team member added"
         RECURRING_GENERATED = "recurring_generated", "Recurring task generated"
+        TASK_ESCALATED = "task_escalated", "Task escalated"
+        TASK_DEESCALATED = "task_deescalated", "Task de-escalated"
     property = models.ForeignKey(
         Property,
         on_delete=models.CASCADE,
@@ -376,3 +388,45 @@ class ActivityLog(models.Model):
         ordering = ["-created_at"]
     def __str__(self):
         return f"{self.get_event_type_display()} - {self.title}"
+class Notification(models.Model):
+    property = models.ForeignKey(
+        Property,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ops_notifications",
+    )
+    title = models.CharField(
+        max_length=200,
+    )
+    message = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+    is_read = models.BooleanField(
+        default=False,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+    task = models.ForeignKey(
+        "Task",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    issue = models.ForeignKey(
+        "Issue",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="notifications",
+    )
+    class Meta:
+        ordering = ["-created_at"]
+    def __str__(self):
+        return f"{self.recipient} - {self.title}"

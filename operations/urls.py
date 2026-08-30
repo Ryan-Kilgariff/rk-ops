@@ -188,4 +188,24 @@ urlpatterns = [
         views.issue_quick_assign,
         name="issue_quick_assign",
     ),
+    path(
+        "p/<slug:property_slug>/notifications/",
+        views.notification_list,
+        name="notification_list",
+    ),
+    path(
+        "p/<slug:property_slug>/notifications/<int:notification_pk>/read/",
+        views.notification_mark_read,
+        name="notification_mark_read",
+    ),
+    path(
+        "p/<slug:property_slug>/notifications/read-all/",
+        views.notification_mark_all_read,
+        name="notification_mark_all_read",
+    ),
+    path(
+        "p/<slug:property_slug>/notifications/<int:notification_pk>/open/",
+        views.notification_open,
+        name="notification_open",
+    ),
 ]

@@ -2,6 +2,7 @@ from datetime import datetime
 from django.utils import timezone
 from .activity import log_activity
 from .models import ActivityLog, RecurringTask, Task
+from .notifications import create_notification
 def generate_recurring_tasks_for_date(
     target_date,
     property_obj=None,
@@ -85,3 +86,91 @@ def generate_recurring_tasks_for_date(
         )
         created_count += 1
     return created_count, skipped_count
+def update_task_escalations(property_obj=None):
+    tasks = (
+        Task.objects
+        .filter(
+            due_at__isnull=False,
+            property__is_active=True,
+        )
+        .exclude(
+            status__in=[
+                Task.Status.COMPLETED,
+                Task.Status.CANCELLED,
+            ]
+        )
+    )
+    if property_obj is not None:
+        tasks = tasks.filter(
+            property=property_obj,
+        )
+    now = timezone.now()
+    updated_count = 0
+    for task in tasks:
+        if task.due_at >= now:
+            new_level = Task.EscalationLevel.NONE
+        else:
+            overdue_hours = (
+                now - task.due_at
+            ).total_seconds() / 3600
+            if overdue_hours >= 24:
+                new_level = (
+                    Task.EscalationLevel.CRITICAL
+                )
+            elif overdue_hours >= 8:
+                new_level = (
+                    Task.EscalationLevel.HIGH
+                )
+            elif overdue_hours >= 2:
+                new_level = (
+                    Task.EscalationLevel.WATCH
+                )
+            else:
+                new_level = (
+                    Task.EscalationLevel.NONE
+                )
+        if task.escalation_level != new_level:
+            old_level = task.escalation_level
+            task.escalation_level = new_level
+            task.save(
+                update_fields=[
+                    "escalation_level",
+                    "updated_at",
+                ]
+            )
+            if new_level != Task.EscalationLevel.NONE:
+                log_activity(
+                    property_obj=task.property,
+                    event_type=ActivityLog.EventType.TASK_ESCALATED,
+                    title=task.title,
+                    user=None,
+                    detail=(
+                        f"{task.get_escalation_level_display()} escalation"
+                    ),
+                )
+                if (
+                    task.assigned_to
+                    and new_level in [
+                        Task.EscalationLevel.HIGH,
+                        Task.EscalationLevel.CRITICAL,
+                    ]
+                ):
+                    create_notification(
+                        property_obj=task.property,
+                        recipient=task.assigned_to,
+                        title=(
+                            f"{task.get_escalation_level_display()} "
+                            "task escalation"
+                        ),
+                        message=task.title,
+                    )
+            elif old_level != Task.EscalationLevel.NONE:
+                log_activity(
+                    property_obj=task.property,
+                    event_type=ActivityLog.EventType.TASK_DEESCALATED,
+                    title=task.title,
+                    user=None,
+                    detail="Escalation cleared",
+                )
+            updated_count += 1
+    return updated_count

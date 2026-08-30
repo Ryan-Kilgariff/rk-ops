@@ -242,6 +242,31 @@ Dashboard
 <section class="section">
     <div class="section-header">
         <div>
+            {% if critical_escalations > 0 %}
+                <div class="critical-alert">
+                    <strong>
+                        {{ critical_escalations }}
+                        critical escalation{{ critical_escalations|pluralize }}
+                    </strong>
+                    require immediate attention.
+                </div>
+            {% endif %}
+            {% if watch_tasks or high_escalations or critical_escalations %}
+                <div class="escalation-summary">
+                    <div>
+                        <strong>{{ watch_tasks }}</strong>
+                        Watch
+                    </div>
+                    <div>
+                        <strong>{{ high_escalations }}</strong>
+                        High
+                    </div>
+                    <div>
+                        <strong>{{ critical_escalations }}</strong>
+                        Critical
+                    </div>
+                </div>
+            {% endif %}
             <h2 class="section-title">
                 Overdue Attention
             </h2>
@@ -284,6 +309,16 @@ Dashboard
                             · {{ item.task.assigned_to.username }}
                         {% endif %}
                     </div>
+                    {% if item.task.escalation_level != "none" %}
+                        <span
+                            class="
+                                escalation-badge
+                                escalation-{{ item.task.escalation_level }}
+                            "
+                        >
+                            {{ item.task.get_escalation_level_display }}
+                        </span>
+                    {% endif %}
                 </div>
                 <div class="overdue-age">
                     {% if item.overdue_days >= 1 %}
@@ -1416,6 +1451,59 @@ Dashboard
 }
 .staff-preview-item .quick-assign-button {
     white-space: nowrap;
+}
+.escalation-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+.escalation-watch {
+    background: #fffbeb;
+    color: #92400e;
+}
+.escalation-high {
+    background: #fff7ed;
+    color: #c2410c;
+}
+.escalation-critical {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+.critical-alert {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    background: #fef2f2;
+    color: #991b1b;
+    font-size: 14px;
+}
+.escalation-summary {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.escalation-summary div {
+    min-width: 110px;
+    padding: 12px 14px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #6b7280;
+}
+.escalation-summary strong {
+    display: block;
+    margin-bottom: 2px;
+    color: #111827;
+    font-size: 20px;
 }
 </style>
 {% endblock %}

@@ -275,6 +275,160 @@
                 flex-direction: column;
             }
         }
+        .notification-link {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            text-decoration: none;
+        }
+        .notification-link:hover {
+            background: #f3f4f6;
+        }
+        .notification-icon {
+            font-size: 18px;
+        }
+        .notification-badge {
+            position: absolute;
+            top: 2px;
+            right: 1px;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #b91c1c;
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+        }
+        .notification-menu {
+            position: relative;
+        }
+        .notification-menu summary {
+            list-style: none;
+        }
+        .notification-menu summary::-webkit-details-marker {
+            display: none;
+        }
+        .notification-link {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .notification-link:hover {
+            background: #f3f4f6;
+        }
+        .notification-icon {
+            font-size: 18px;
+        }
+        .notification-badge {
+            position: absolute;
+            top: 1px;
+            right: 0;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 999px;
+            background: #b91c1c;
+            color: white;
+            font-size: 10px;
+            font-weight: 800;
+        }
+        .notification-dropdown {
+            position: absolute;
+            top: calc(100% + 10px);
+            right: 0;
+            width: 360px;
+            max-width: calc(100vw - 32px);
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            box-shadow:
+                0 14px 35px
+                rgba(17, 24, 39, 0.14);
+            overflow: hidden;
+            z-index: 1000;
+        }
+        .notification-dropdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .notification-dropdown-header span {
+            color: #6b7280;
+            font-size: 12px;
+        }
+        .notification-dropdown-list {
+            max-height: 360px;
+            overflow-y: auto;
+        }
+        .notification-dropdown-item {
+            display: block;
+            padding: 13px 16px;
+            color: #111827;
+            text-decoration: none;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .notification-dropdown-item:hover {
+            background: #f9fafb;
+        }
+        .notification-dropdown-item.unread {
+            background: #f9fafb;
+            border-left: 3px solid #111827;
+        }
+        .notification-dropdown-title {
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .notification-dropdown-message {
+            margin-top: 3px;
+            color: #6b7280;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .notification-dropdown-time {
+            margin-top: 5px;
+            color: #9ca3af;
+            font-size: 11px;
+        }
+        .notification-dropdown-empty {
+            padding: 24px 16px;
+            text-align: center;
+            color: #6b7280;
+            font-size: 13px;
+        }
+        .notification-dropdown-footer {
+            display: block;
+            padding: 12px 16px;
+            text-align: center;
+            color: #111827;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 700;
+            background: #f9fafb;
+        }
+        .notification-dropdown-footer:hover {
+            background: #f3f4f6;
+        }
     </style>
     {% block extra_css %}
     {% endblock %}
@@ -371,6 +525,71 @@
                     Operations
                 {% endblock %}
             </div>
+            {% if property %}
+                <details class="notification-menu">
+                    <summary
+                        class="notification-link"
+                        aria-label="Notifications"
+                    >
+                        <span class="notification-icon">
+                            🔔
+                        </span>
+                        {% if unread_notification_count > 0 %}
+                            <span class="notification-badge">
+                                {{ unread_notification_count }}
+                            </span>
+                        {% endif %}
+                    </summary>
+                    <div class="notification-dropdown">
+                        <div class="notification-dropdown-header">
+                            <strong>
+                                Notifications
+                            </strong>
+                            {% if unread_notification_count > 0 %}
+                                <span>
+                                    {{ unread_notification_count }} unread
+                                </span>
+                            {% endif %}
+                        </div>
+                        <div class="notification-dropdown-list">
+                            {% for notification in recent_notifications %}
+                                <a
+                                    href="{% url 'operations:notification_open' property.slug notification.pk %}"
+                                    class="
+                                        notification-dropdown-item
+                                        {% if not notification.is_read %}
+                                            unread
+                                        {% endif %}
+                                    "
+                                >
+                                    <div class="notification-dropdown-title">
+                                        {{ notification.title }}
+                                    </div>
+                                    {% if notification.message %}
+                                        <div class="notification-dropdown-message">
+                                            {{ notification.message }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="notification-dropdown-time">
+                                        {{ notification.created_at|timesince }}
+                                        ago
+                                    </div>
+                                </a>
+                            {% empty %}
+                                <div class="notification-dropdown-empty">
+                                    No notifications.
+                                </div>
+                            {% endfor %}
+                        </div>
+                        <a
+                            href="{% url 'operations:notification_list' property.slug %}"
+                            class="notification-dropdown-footer"
+                        >
+                            View all notifications
+                        </a>
+                    </div>
+                </details>
+            {% endif %}
             <div class="user-area">
                 {% if request.user.is_authenticated %}
                     {{ request.user.username }}
