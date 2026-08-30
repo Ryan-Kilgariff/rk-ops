@@ -5,6 +5,11 @@ from .models import (
     OrganisationInvitation,
     PropertyMembership,
 )
+from django import forms
+from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
+from .models import OrganisationInvitation
+User = get_user_model()
 class OrganisationInvitationForm(forms.ModelForm):
     class Meta:
         model = OrganisationInvitation
@@ -47,6 +52,63 @@ class OrganisationInvitationForm(forms.ModelForm):
                 self.fields["properties"]
                 .queryset.none()
             )
+class InvitationSignupForm(forms.ModelForm):
+    password1 = forms.CharField(
+        widget=forms.PasswordInput(
+            attrs={
+                "class": "form-control",
+            }
+        ),
+        label="Password",
+    )
+    password2 = forms.CharField(
+        widget=forms.PasswordInput(
+            attrs={
+                "class": "form-control",
+            }
+        ),
+        label="Confirm password",
+    )
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+        ]
+        widgets = {
+            "first_name": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+            "last_name": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+        }
+    def clean(self):
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get("password1")
+        password2 = cleaned_data.get("password2")
+        if (
+            password1
+            and password2
+            and password1 != password2
+        ):
+            self.add_error(
+                "password2",
+                "Passwords do not match.",
+            )
+        if password1:
+            try:
+                validate_password(password1)
+            except forms.ValidationError as error:
+                self.add_error(
+                    "password1",
+                    error,
+                )
+        return cleaned_data
 User = get_user_model()
 class TeamMemberCreateForm(UserCreationForm):
     email = forms.EmailField(

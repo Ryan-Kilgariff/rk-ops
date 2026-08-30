@@ -130,43 +130,6 @@ Account
             </a>
         {% endif %}
     </div>
-    {% if pending_invitations %}
-        <section class="section">
-            <div class="section-header">
-                <div>
-                    <h2 class="section-title">
-                        Pending Invitations
-                    </h2>
-                    <div class="task-meta">
-                        Invitations waiting to be accepted
-                    </div>
-                </div>
-            </div>
-            <div class="account-list">
-                {% for invitation in pending_invitations %}
-                    <div class="account-list-item">
-                        <div>
-                            <strong>
-                                {{ invitation.email }}
-                            </strong>
-                            <div class="task-meta">
-                                {{ invitation.get_role_display }}
-                                ·
-                                Invited
-                                {{ invitation.created_at|date:"d M Y" }}
-                            </div>
-                        </div>
-                        <a
-                            href="{% url 'operations:organisation_invitation_accept' invitation.token %}"
-                            class="button secondary-action"
-                        >
-                            Test link
-                        </a>
-                    </div>
-                {% endfor %}
-            </div>
-        </section>
-    {% endif %}
     <div class="account-list">
         {% for member in organisation_memberships %}
             <div class="account-list-item">
@@ -193,6 +156,77 @@ Account
         {% endfor %}
     </div>
 </section>
+{% if pending_invitations %}
+    <section class="section">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">
+                    Pending Invitations
+                </h2>
+                <div class="task-meta">
+                    Invitations waiting to be accepted
+                </div>
+            </div>
+        </div>
+        <div class="account-list">
+            {% for invitation in pending_invitations %}
+                <div class="account-list-item">
+                    <div>
+                        <strong>
+                            {{ invitation.email }}
+                        </strong>
+                        <div class="task-meta">
+                            {{ invitation.get_role_display }}
+                            · Invited
+                            {{ invitation.created_at|date:"d M Y" }}
+                        </div>
+                        {% if invitation.expires_at %}
+                            <div class="task-meta">
+                                Expires
+                                {{ invitation.expires_at|date:"d M Y · H:i" }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    <div class="invitation-actions-inline">
+                        {% if invitation.is_expired %}
+                            <span class="invitation-status expired">
+                                Expired
+                            </span>
+                        {% else %}
+                            <span class="invitation-status pending">
+                                Pending
+                            </span>
+                        {% endif %}
+                        <form
+                            method="post"
+                            action="{% url 'operations:organisation_invitation_resend' organisation.slug invitation.pk %}"
+                        >
+                            {% csrf_token %}
+                            <button
+                                type="submit"
+                                class="button secondary-action"
+                            >
+                                Resend
+                            </button>
+                        </form>
+                        <form
+                            method="post"
+                            action="{% url 'operations:organisation_invitation_revoke' organisation.slug invitation.pk %}"
+                        >
+                            {% csrf_token %}
+                            <button
+                                type="submit"
+                                class="button danger-action"
+                            >
+                                Revoke
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+{% endif %}
 <section class="section">
     <div class="section-header">
         <div>
@@ -329,6 +363,39 @@ a.account-list-item:hover {
         align-items: flex-start;
         flex-direction: column;
     }
+}
+.invitation-actions-inline {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.invitation-actions-inline form {
+    margin: 0;
+}
+.invitation-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+}
+.invitation-status.pending {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.invitation-status.expired {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+.danger-action {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+.danger-action:hover {
+    background: #fee2e2;
 }
 </style>
 {% endblock %}

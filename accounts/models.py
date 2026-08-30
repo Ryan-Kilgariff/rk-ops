@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 from properties.models import Property
 import uuid
+from django.utils import timezone
 class OrganisationInvitation(models.Model):
     class Role(models.TextChoices):
         ADMIN = "admin", "Administrator"
@@ -54,6 +55,14 @@ class OrganisationInvitation(models.Model):
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    revoked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
     class Meta:
         ordering = ["-created_at"]
         constraints = [
@@ -69,6 +78,11 @@ class OrganisationInvitation(models.Model):
                 name="unique_active_organisation_invitation",
             ),
         ]
+    @property
+    def is_expired(self):
+        if not self.expires_at:
+            return False
+        return timezone.now() >= self.expires_at
     def __str__(self):
         return (
             f"{self.email} → "

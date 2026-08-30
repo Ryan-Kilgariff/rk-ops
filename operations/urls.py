@@ -228,4 +228,19 @@ urlpatterns = [
         views.organisation_invitation_accept,
         name="organisation_invitation_accept",
     ),
+    path(
+        "account/<slug:organisation_slug>/invitations/<int:invitation_pk>/revoke/",
+        views.organisation_invitation_revoke,
+        name="organisation_invitation_revoke",
+    ),
+    path(
+        "account/<slug:organisation_slug>/invitations/<int:invitation_pk>/resend/",
+        views.organisation_invitation_resend,
+        name="organisation_invitation_resend",
+    ),
+    path(
+        "invitations/<uuid:token>/signup/",
+        views.organisation_invitation_signup,
+        name="organisation_invitation_signup",
+    ),
 ]
