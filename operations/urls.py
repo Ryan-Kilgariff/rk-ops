@@ -278,4 +278,14 @@ urlpatterns = [
         views.subscription_history,
         name="subscription_history",
     ),
+    path(
+        "account/<slug:organisation_slug>/billing/paypal/return/",
+        views.paypal_billing_return,
+        name="paypal_billing_return",
+    ),
+    path(
+        "account/<slug:organisation_slug>/billing/paypal/cancel/",
+        views.paypal_billing_cancel,
+        name="paypal_billing_cancel",
+    ),
 ]

@@ -156,3 +156,19 @@ else:
     PAYPAL_API_BASE_URL = (
         "https://api-m.sandbox.paypal.com"
     )
+PAYPAL_PRODUCT_ID = os.getenv(
+    "PAYPAL_PRODUCT_ID",
+    "",
+)
+PAYPAL_STARTER_PLAN_ID = os.getenv(
+    "PAYPAL_STARTER_PLAN_ID",
+    "",
+)
+PAYPAL_GROWTH_PLAN_ID = os.getenv(
+    "PAYPAL_GROWTH_PLAN_ID",
+    "",
+)
+PAYPAL_PRO_PLAN_ID = os.getenv(
+    "PAYPAL_PRO_PLAN_ID",
+    "",
+)

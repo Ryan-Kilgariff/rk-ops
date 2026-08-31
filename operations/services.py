@@ -289,17 +289,19 @@ def change_subscription_plan(
     *,
     reason="",
     changed_by=None,
+    sync_provider=True,
 ):
     previous_plan = subscription.plan
     if previous_plan == new_plan:
         return False
-    adapter = get_billing_adapter(
+    if sync_provider:
+        adapter = get_billing_adapter(
             subscription
         )
-    adapter.change_plan(
-        subscription,
-        new_plan,
-    )
+        adapter.change_plan(
+            subscription,
+            new_plan,
+        )
     subscription.plan = new_plan
     subscription.save(
         update_fields=[
@@ -308,7 +310,9 @@ def change_subscription_plan(
         ]
     )
     OrganisationSubscriptionEvent.objects.create(
-        organisation=subscription.organisation,
+        organisation=(
+            subscription.organisation
+        ),
         subscription=subscription,
         event_type=(
             OrganisationSubscriptionEvent

@@ -22,6 +22,8 @@ from accounts.forms import (
 from properties.models import (
     Organisation,
     OrganisationSubscription,
+    OrganisationBillingEvent,
+    OrganisationBillingSession,
     Property,
 )
 from .forms import (
@@ -49,6 +51,9 @@ from accounts.models import (
     OrganisationMembership,
     PropertyMembership,
 )
+from operations.billing import (
+    get_billing_adapter,
+)
 from .utils import (
     get_organisation_for_user,
     get_property_for_user,
@@ -73,6 +78,7 @@ from operations.services import (
     reactivate_subscription,
     change_subscription_plan,
     create_billing_session,
+    log_billing_event,
 )
 from django.contrib import messages
 from django.utils import timezone
@@ -3366,4 +3372,138 @@ def subscription_history(
             "subscription_events": events,
             "active_page": "account",
         },
+    )
+@login_required
+def paypal_billing_return(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        raise PermissionDenied(
+            "This organisation does not have "
+            "a subscription."
+        )
+    billing_session = (
+        OrganisationBillingSession.objects
+        .filter(
+            organisation=organisation,
+            subscription=subscription,
+            status=(
+                OrganisationBillingSession
+                .Status
+                .PENDING
+            ),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if not billing_session:
+        messages.warning(
+            request,
+            "No pending PayPal billing session was found.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    adapter = get_billing_adapter(
+        subscription
+    )
+    paypal_data = adapter.get_subscription(
+        billing_session.provider_session_id
+    )
+    paypal_status = paypal_data.get(
+        "status",
+        ""
+    )
+    if paypal_status == "ACTIVE":
+        change_subscription_plan(
+            subscription,
+            billing_session.requested_plan,
+            reason=(
+                "Subscription plan changed "
+                "after PayPal confirmation."
+            ),
+            changed_by=request.user,
+            sync_provider=False,
+        )
+        billing_session.status = (
+            OrganisationBillingSession
+            .Status
+            .COMPLETED
+        )
+        billing_session.completed_at = (
+            timezone.now()
+        )
+        billing_session.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "updated_at",
+            ]
+        )
+        log_billing_event(
+            subscription,
+            OrganisationBillingEvent
+            .EventType
+            .PAYMENT_SUCCEEDED,
+            amount=billing_session.amount,
+            provider_reference=(
+                billing_session.provider_reference
+            ),
+            description=(
+                "PayPal subscription activated."
+            ),
+            metadata={
+                "paypal_subscription_id": (
+                    billing_session.provider_session_id
+                ),
+            },
+        )
+        messages.success(
+            request,
+            (
+                "PayPal confirmed the subscription. "
+                "Your RK Ops plan has been updated."
+            ),
+        )
+    else:
+        messages.info(
+            request,
+            (
+                "PayPal approval was received, "
+                "but the subscription is not active yet. "
+                f"Current PayPal status: {paypal_status or 'Unknown'}."
+            ),
+        )
+    return redirect(
+        "operations:organisation_account",
+        organisation_slug=organisation.slug,
+    )
+@login_required
+def paypal_billing_cancel(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    messages.warning(
+        request,
+        "PayPal checkout was cancelled.",
+    )
+    return redirect(
+        "operations:organisation_account",
+        organisation_slug=organisation.slug,
     )
