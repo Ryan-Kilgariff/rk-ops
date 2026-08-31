@@ -19,7 +19,11 @@ from accounts.forms import (
     TeamMemberCreateForm,
     InvitationSignupForm,
 )
-from properties.models import Property
+from properties.models import (
+    Organisation,
+    OrganisationSubscription,
+    Property,
+)
 from .forms import (
     ChecklistForm,
     ChecklistItemForm,
@@ -625,14 +629,22 @@ def property_home(request):
             .filter(
                 is_active=True,
                 organisation__is_active=True,
+                organisation__subscription__status__in=[
+                    OrganisationSubscription.Status.ACTIVE,
+                    OrganisationSubscription.Status.TRIAL,
+                    OrganisationSubscription.Status.PAST_DUE,
+                ],
             )
-            .select_related("organisation")
+            .select_related(
+                "organisation",
+                "organisation__subscription",
+            )
             .order_by("name")
             .first()
         )
         if not property_obj:
-            raise PermissionDenied(
-                "No active properties are available."
+            return redirect(
+                "operations:account_home"
             )
         return redirect(
             "operations:dashboard",
@@ -650,6 +662,11 @@ def property_home(request):
             property__organisation__is_active=True,
             property__organisation__memberships__user=request.user,
             property__organisation__memberships__is_active=True,
+            property__organisation__subscription__status__in=[
+                OrganisationSubscription.Status.ACTIVE,
+                OrganisationSubscription.Status.TRIAL,
+                OrganisationSubscription.Status.PAST_DUE,
+            ],
         )
         .select_related(
             "property",
@@ -660,8 +677,21 @@ def property_home(request):
     )
     membership = memberships.first()
     if not membership:
+        has_organisation_access = (
+            OrganisationMembership.objects
+            .filter(
+                user=request.user,
+                is_active=True,
+                organisation__is_active=True,
+            )
+            .exists()
+        )
+        if has_organisation_access:
+            return redirect(
+                "operations:account_home"
+            )
         raise PermissionDenied(
-            "You do not currently have access to any property."
+            "You do not currently have access to RK Ops."
         )
     return redirect(
         "operations:dashboard",
@@ -2058,6 +2088,11 @@ def organisation_account(
             organisation_slug,
         )
     )
+    subscription = getattr(
+        organisation,
+        "subscription",
+        None,
+    )
     pending_invitations = (
         OrganisationInvitation.objects
         .filter(
@@ -2094,6 +2129,7 @@ def organisation_account(
         "property_count": properties.count(),
         "active_page": "account",
         "pending_invitations": pending_invitations,
+        "subscription": subscription,
     }
     return render(
         request,
@@ -2111,6 +2147,23 @@ def organisation_property_create(
             organisation_slug,
         )
     )
+    subscription = getattr(
+        organisation,
+        "subscription",
+        None,
+    )
+    if subscription:
+        current_property_count = (
+            organisation.properties.count()
+        )
+        if (
+            current_property_count
+            >= subscription.property_limit
+        ):
+            raise PermissionDenied(
+                "This organisation has reached "
+                "its property limit."
+            )
     current_property = (
         organisation.properties
         .filter(is_active=True)
@@ -2180,6 +2233,38 @@ def organisation_invite_member(
             organisation_slug,
         )
     )
+    subscription = getattr(
+        organisation,
+        "subscription",
+        None,
+    )
+    if subscription:
+        current_member_count = (
+            OrganisationMembership.objects
+            .filter(
+                organisation=organisation,
+                is_active=True,
+            )
+            .count()
+        )
+        pending_invite_count = (
+            OrganisationInvitation.objects
+            .filter(
+                organisation=organisation,
+                is_active=True,
+                accepted_at__isnull=True,
+            )
+            .count()
+        )
+        if (
+            current_member_count
+            + pending_invite_count
+            >= subscription.member_limit
+        ):
+            raise PermissionDenied(
+                "This organisation has reached "
+                "its team member limit."
+            )
     current_property = (
         organisation.properties
         .filter(is_active=True)
@@ -2208,7 +2293,7 @@ def organisation_invite_member(
             invitation.save()
             form.save_m2m()
             accept_path = reverse(
-                "operations:organisation_invitation_accept",
+                "operations:organisation_invitation_signup",
                 kwargs={
                     "token": invitation.token,
                 },
@@ -2446,6 +2531,19 @@ def organisation_invitation_signup(
         )
         .first()
     )
+    current_property = (
+        invitation.properties
+        .filter(is_active=True)
+        .order_by("name")
+        .first()
+    )
+    if current_property is None:
+        current_property = (
+            invitation.organisation.properties
+            .filter(is_active=True)
+            .order_by("name")
+            .first()
+        )
     if existing_user:
         accept_url = reverse(
             "operations:organisation_invitation_accept",
@@ -2519,6 +2617,7 @@ def organisation_invitation_signup(
             "form": form,
             "invitation": invitation,
             "organisation": invitation.organisation,
+            "property": current_property,
         },
     )
 @login_required
@@ -2638,4 +2737,42 @@ def organisation_invitation_resend(
     return redirect(
         "operations:organisation_account",
         organisation_slug=organisation.slug,
+    )
+@login_required
+def account_home(request):
+    if request.user.is_superuser:
+        organisations = (
+            Organisation.objects
+            .filter(is_active=True)
+            .select_related("subscription")
+            .order_by("name")
+        )
+    else:
+        organisation_ids = (
+            OrganisationMembership.objects
+            .filter(
+                user=request.user,
+                is_active=True,
+            )
+            .values_list(
+                "organisation_id",
+                flat=True,
+            )
+        )
+        organisations = (
+            Organisation.objects
+            .filter(
+                id__in=organisation_ids,
+                is_active=True,
+            )
+            .select_related("subscription")
+            .order_by("name")
+        )
+    return render(
+        request,
+        "operations/account_home.html",
+        {
+            "organisations": organisations,
+            "active_page": "account",
+        },
     )

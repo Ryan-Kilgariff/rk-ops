@@ -6,8 +6,28 @@ from accounts.models import (
 )
 from properties.models import (
     Organisation,
+    OrganisationSubscription,
     Property,
 )
+def require_active_subscription(
+    organisation,
+):
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        raise PermissionDenied(
+            "This organisation does not have "
+            "an active RK Ops subscription."
+        )
+    blocked_statuses = {
+        OrganisationSubscription.Status.CANCELLED,
+        OrganisationSubscription.Status.SUSPENDED,
+    }
+    if subscription.status in blocked_statuses:
+        raise PermissionDenied(
+            "This RK Ops organisation is currently unavailable."
+        )
+    return subscription
 def get_property_for_user(
     user,
     property_slug,
@@ -19,25 +39,26 @@ def get_property_for_user(
         slug=property_slug,
         is_active=True,
     )
-    # --------------------------------------------------
-    # SUPERUSER
-    # --------------------------------------------------
-    if user.is_superuser:
-        return property_obj, None
-    # --------------------------------------------------
-    # PROPERTY MUST BELONG TO AN ACTIVE ORGANISATION
-    # --------------------------------------------------
     organisation = property_obj.organisation
-    if (
-        organisation is None
-        or not organisation.is_active
-    ):
+    if not organisation.is_active:
         raise PermissionDenied(
             "This property is not available."
         )
-    # --------------------------------------------------
+    # -----------------------------------------------
+    # SUBSCRIPTION CHECK
+    # Applies to everybody, including superusers.
+    # -----------------------------------------------
+    require_active_subscription(
+        organisation
+    )
+    # -----------------------------------------------
+    # SUPERUSER
+    # -----------------------------------------------
+    if user.is_superuser:
+        return property_obj, None
+    # -----------------------------------------------
     # ORGANISATION ACCESS
-    # --------------------------------------------------
+    # -----------------------------------------------
     organisation_membership = (
         OrganisationMembership.objects
         .filter(
@@ -51,9 +72,9 @@ def get_property_for_user(
         raise PermissionDenied(
             "You do not have access to this organisation."
         )
-    # --------------------------------------------------
+    # -----------------------------------------------
     # PROPERTY ACCESS
-    # --------------------------------------------------
+    # -----------------------------------------------
     property_membership = (
         PropertyMembership.objects
         .filter(
@@ -67,10 +88,7 @@ def get_property_for_user(
         raise PermissionDenied(
             "You do not have access to this property."
         )
-    return (
-        property_obj,
-        property_membership,
-    )
+    return property_obj, property_membership
 def require_management_access(
     user,
     property_slug,

@@ -8,6 +8,8 @@ def rk_ops_permissions(request):
     unread_notification_count = 0
     recent_notifications = []
     current_property = None
+    current_subscription = None
+    subscription_warning = False
     if not request.user.is_authenticated:
         return {
             "can_manage_team": False,
@@ -15,12 +17,25 @@ def rk_ops_permissions(request):
             "accessible_properties": [],
             "unread_notification_count": 0,
             "recent_notifications": [],
+            "current_subscription": None,
+            "subscription_warning": False,
         }
     property_slug = (
         request.resolver_match.kwargs.get("property_slug")
         if request.resolver_match
         else None
     )
+    if current_property:
+        current_subscription = getattr(
+            current_property.organisation,
+            "subscription",
+            None,
+        )
+        if current_subscription:
+            subscription_warning = (
+                current_subscription.status
+                == current_subscription.Status.PAST_DUE
+            )
     # --------------------------------------------------
     # SUPERUSER
     # --------------------------------------------------
@@ -71,6 +86,8 @@ def rk_ops_permissions(request):
             "accessible_properties": accessible_properties,
             "unread_notification_count": unread_notification_count,
             "recent_notifications": recent_notifications,
+            "current_subscription": current_subscription,
+            "subscription_warning": subscription_warning,
         }
     # --------------------------------------------------
     # NORMAL USER
@@ -145,4 +162,6 @@ def rk_ops_permissions(request):
         "accessible_properties": accessible_properties,
         "unread_notification_count": unread_notification_count,
         "recent_notifications": recent_notifications,
+        "current_subscription": current_subscription,
+        "subscription_warning": subscription_warning,
     }

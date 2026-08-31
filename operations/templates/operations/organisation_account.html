@@ -55,10 +55,18 @@ Account
             Plan
         </div>
         <div class="account-stat-text">
-            Founder Beta
+            {% if subscription %}
+                {{ subscription.get_plan_display }}
+            {% else %}
+                Not configured
+            {% endif %}
         </div>
         <div class="task-meta">
-            Billing integration coming later
+            {% if subscription %}
+                {{ subscription.get_status_display }}
+            {% else %}
+                No subscription
+            {% endif %}
         </div>
     </article>
 </section>
@@ -81,8 +89,52 @@ Account
             </a>
         {% endif %}
     </div>
-    <div class="account-list">
-        {% for property_item in organisation_properties %}
+<div class="account-list">
+    {% for property_item in organisation_properties %}
+        {% if subscription %}
+            {% if subscription.status == "suspended" or subscription.status == "cancelled" %}
+                <div class="account-list-item account-list-item-disabled">
+                    <div>
+                        <strong>
+                            {{ property_item.name }}
+                        </strong>
+                        <div class="task-meta">
+                            {% if property_item.town_city %}
+                                {{ property_item.town_city }}
+                            {% endif %}
+                            {% if property_item.postcode %}
+                                · {{ property_item.postcode }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="account-property-locked">
+                        Access unavailable
+                    </span>
+                </div>
+            {% else %}
+                <a
+                    href="{% url 'operations:dashboard' property_item.slug %}"
+                    class="account-list-item"
+                >
+                    <div>
+                        <strong>
+                            {{ property_item.name }}
+                        </strong>
+                        <div class="task-meta">
+                            {% if property_item.town_city %}
+                                {{ property_item.town_city }}
+                            {% endif %}
+                            {% if property_item.postcode %}
+                                · {{ property_item.postcode }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="account-arrow">
+                        →
+                    </span>
+                </a>
+            {% endif %}
+        {% else %}
             <a
                 href="{% url 'operations:dashboard' property_item.slug %}"
                 class="account-list-item"
@@ -104,12 +156,13 @@ Account
                     →
                 </span>
             </a>
-        {% empty %}
-            <div class="empty-state">
-                No active properties.
-            </div>
-        {% endfor %}
-    </div>
+        {% endif %}
+    {% empty %}
+        <div class="empty-state">
+            No active properties.
+        </div>
+    {% endfor %}
+</div>
 </section>
 <section class="section">
     <div class="section-header">
@@ -238,22 +291,107 @@ Account
             </div>
         </div>
     </div>
+    {% if subscription %}
+        {% if subscription.status == "past_due" %}
+            <div class="subscription-alert subscription-alert-warning">
+                <div>
+                    <strong>
+                        Payment requires attention
+                    </strong>
+                    <div class="task-meta">
+                        Your RK Ops subscription is past due.
+                        Operational access is currently continuing.
+                    </div>
+                </div>
+            </div>
+        {% elif subscription.status == "suspended" %}
+            <div class="subscription-alert subscription-alert-danger">
+                <div>
+                    <strong>
+                        Subscription suspended
+                    </strong>
+                    <div class="task-meta">
+                        Operational access is currently unavailable.
+                        You can still manage your RK Ops account here.
+                    </div>
+                </div>
+            </div>
+        {% elif subscription.status == "cancelled" %}
+            <div class="subscription-alert subscription-alert-danger">
+                <div>
+                    <strong>
+                        Subscription cancelled
+                    </strong>
+                    <div class="task-meta">
+                        Your RK Ops operational access is no longer active.
+                    </div>
+                </div>
+            </div>
+        {% elif subscription.status == "trial" %}
+            <div class="subscription-alert subscription-alert-info">
+                <div>
+                    <strong>
+                        RK Ops trial
+                    </strong>
+                    <div class="task-meta">
+                        Your organisation currently has full trial access.
+                        {% if subscription.trial_ends_at %}
+                            Trial ends
+                            {{ subscription.trial_ends_at|date:"d M Y" }}.
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    {% endif %}
     <div class="subscription-card">
-        <div>
-            <div class="account-stat-label">
-                Current Plan
+        {% if subscription %}
+            <div>
+                <div class="account-stat-label">
+                    Current Plan
+                </div>
+                <div class="subscription-plan">
+                    {{ subscription.get_plan_display }}
+                </div>
+                <div class="task-meta">
+                    {{ subscription.property_limit }}
+                    propert{{ subscription.property_limit|pluralize:"y,ies" }}
+                    .
+                    {{ subscription.member_limit }}
+                    team member{{ subscription.member_limit|pluralize }}
+                </div>
+                {% if subscription.trial_ends_at %}
+                    <div class="task-meta">
+                        Trial ends
+                        {{ subscription.trial_ends_at|date:"d M Y" }}
+                    </div>
+                {% endif %}
+                {% if subscription.current_period_ends_at %}
+                    <div class="task-meta">
+                        Current period ends
+                        {{ subscription.current_period_ends_at|date:"d M Y" }}
+                    </div>
+                {% endif %}
             </div>
-            <div class="subscription-plan">
-                Founder Beta
+            <span
+                class="
+                    subscription-status
+                    subscription-status-{{ subscription.status }}
+                "
+            >
+                {{ subscription.get_status_display }}
+            </span>
+        {% else %}
+            <div>
+                <strong>
+                    Subscription not configured
+                </strong>
+                <div class="task-meta">
+                    This organisation does not yet have
+                    a subscription record.
+                </div>
             </div>
-            <div class="task-meta">
-                Subscription management will be added
-                before commercial self-service launch.
-            </div>
-        </div>
-        <span class="status-badge">
-            Active
-        </span>
+        {% endif %}
     </div>
 </section>
 {% endblock %}
@@ -396,6 +534,71 @@ a.account-list-item:hover {
 }
 .danger-action:hover {
     background: #fee2e2;
+}
+.subscription-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+}
+.subscription-status-active {
+    background: #ecfdf5;
+    color: #047857;
+}
+.subscription-status-trial {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.subscription-status-past_due {
+    background: #fff7ed;
+    color: #c2410c;
+}
+.subscription-status-cancelled,
+.subscription-status-suspended {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+.subscription-alert {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 14px;
+    padding: 16px 18px;
+    border-radius: 12px;
+    border: 1px solid;
+}
+.subscription-alert-warning {
+    background: #fff7ed;
+    border-color: #fed7aa;
+    color: #9a3412;
+}
+.subscription-alert-danger {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #991b1b;
+}
+.subscription-alert-info {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1e40af;
+}
+.subscription-alert .task-meta {
+    margin-top: 4px;
+    color: inherit;
+    opacity: 0.85;
+}
+.account-list-item-disabled {
+    background: #f9fafb;
+    cursor: default;
+}
+.account-property-locked {
+    color: #b91c1c;
+    font-size: 12px;
+    font-weight: 700;
 }
 </style>
 {% endblock %}

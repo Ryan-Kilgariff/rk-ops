@@ -1,0 +1,136 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Account
+{% endblock %}
+{% block topbar_title %}
+Account
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    RK Ops Account
+</p>
+<h1 class="page-title">
+    Organisations
+</h1>
+<p class="page-subtitle">
+    Manage your organisations, properties and subscriptions.
+</p>
+<section class="section">
+    <div class="organisation-grid">
+        {% for organisation in organisations %}
+            <a
+                href="{% url 'operations:organisation_account' organisation.slug %}"
+                class="organisation-card"
+            >
+                <div class="organisation-card-header">
+                    <div>
+                        <h2 class="organisation-name">
+                            {{ organisation.name }}
+                        </h2>
+                        <div class="task-meta">
+                            {{ organisation.properties.count }}
+                            propert{{ organisation.properties.count|pluralize:"y,ies" }}
+                        </div>
+                    </div>
+                    {% if organisation.subscription %}
+                        <span
+                            class="
+                                organisation-status
+                                organisation-status-{{ organisation.subscription.status }}
+                            "
+                        >
+                            {{ organisation.subscription.get_status_display }}
+                        </span>
+                    {% endif %}
+                </div>
+                {% if organisation.subscription %}
+                    <div class="organisation-plan">
+                        {{ organisation.subscription.get_plan_display }}
+                    </div>
+                {% else %}
+                    <div class="organisation-plan">
+                        Subscription not configured
+                    </div>
+                {% endif %}
+                <div class="organisation-open">
+                    Manage account →
+                </div>
+            </a>
+        {% empty %}
+            <div class="empty-state">
+                You do not currently have access to any organisations.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.organisation-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(280px, 1fr)
+        );
+    gap: 16px;
+}
+.organisation-card {
+    display: block;
+    padding: 20px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    color: #111827;
+    text-decoration: none;
+}
+.organisation-card:hover {
+    background: #f9fafb;
+}
+.organisation-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+.organisation-name {
+    margin: 0 0 4px;
+    font-size: 18px;
+}
+.organisation-plan {
+    margin-top: 20px;
+    font-size: 14px;
+    font-weight: 700;
+}
+.organisation-open {
+    margin-top: 18px;
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 700;
+}
+.organisation-status {
+    display: inline-flex;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+}
+.organisation-status-active {
+    background: #ecfdf5;
+    color: #047857;
+}
+.organisation-status-trial {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.organisation-status-past_due {
+    background: #fff7ed;
+    color: #c2410c;
+}
+.organisation-status-suspended,
+.organisation-status-cancelled {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+</style>
+{% endblock %}

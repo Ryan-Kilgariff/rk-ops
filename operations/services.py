@@ -3,6 +3,7 @@ from django.utils import timezone
 from .activity import log_activity
 from .models import ActivityLog, RecurringTask, Task
 from .notifications import create_notification
+from properties.models import OrganisationSubscription
 def generate_recurring_tasks_for_date(
     target_date,
     property_obj=None,
@@ -172,5 +173,54 @@ def update_task_escalations(property_obj=None):
                     user=None,
                     detail="Escalation cleared",
                 )
+            updated_count += 1
+    return updated_count
+def update_subscription_statuses():
+    subscriptions = (
+        OrganisationSubscription.objects
+        .select_related("organisation")
+        .filter(
+            organisation__is_active=True,
+        )
+    )
+    now = timezone.now()
+    updated_count = 0
+    for subscription in subscriptions:
+        new_status = subscription.status
+        # ------------------------------------------
+        # TRIAL EXPIRY
+        # ------------------------------------------
+        if (
+            subscription.status
+            == OrganisationSubscription.Status.TRIAL
+            and subscription.trial_ends_at
+            and subscription.trial_ends_at <= now
+        ):
+            new_status = (
+                OrganisationSubscription.Status.SUSPENDED
+            )
+        # ------------------------------------------
+        # ACTIVE PERIOD EXPIRY
+        # ------------------------------------------
+        elif (
+            subscription.status
+            == OrganisationSubscription.Status.ACTIVE
+            and subscription.current_period_ends_at
+            and subscription.current_period_ends_at <= now
+        ):
+            new_status = (
+                OrganisationSubscription.Status.PAST_DUE
+            )
+        # ------------------------------------------
+        # SAVE CHANGE
+        # ------------------------------------------
+        if new_status != subscription.status:
+            subscription.status = new_status
+            subscription.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
             updated_count += 1
     return updated_count

@@ -243,4 +243,9 @@ urlpatterns = [
         views.organisation_invitation_signup,
         name="organisation_invitation_signup",
     ),
+    path(
+        "account/",
+        views.account_home,
+        name="account_home",
+    ),
 ]

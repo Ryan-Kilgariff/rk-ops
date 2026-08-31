@@ -25,6 +25,62 @@ class Organisation(models.Model):
         ordering = ["name"]
     def __str__(self):
         return self.name
+class OrganisationSubscription(models.Model):
+    class Plan(models.TextChoices):
+        FOUNDER_BETA = "founder_beta", "Founder Beta"
+        STARTER = "starter", "Starter"
+        GROWTH = "growth", "Growth"
+        PRO = "pro", "Pro"
+    class Status(models.TextChoices):
+        TRIAL = "trial", "Trial"
+        ACTIVE = "active", "Active"
+        PAST_DUE = "past_due", "Past Due"
+        CANCELLED = "cancelled", "Cancelled"
+        SUSPENDED = "suspended", "Suspended"
+    organisation = models.OneToOneField(
+        Organisation,
+        on_delete=models.CASCADE,
+        related_name="subscription",
+    )
+    plan = models.CharField(
+        max_length=30,
+        choices=Plan.choices,
+        default=Plan.FOUNDER_BETA,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    property_limit = models.PositiveIntegerField(
+        default=1,
+    )
+    member_limit = models.PositiveIntegerField(
+        default=10,
+    )
+    trial_ends_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    current_period_ends_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    cancelled_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+    def __str__(self):
+        return (
+            f"{self.organisation.name} - "
+            f"{self.get_plan_display()}"
+        )
 class Property(models.Model):
     name = models.CharField(max_length=150)
     slug = models.SlugField(unique=True)

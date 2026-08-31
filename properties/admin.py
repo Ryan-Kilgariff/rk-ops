@@ -1,5 +1,9 @@
 from django.contrib import admin
-from .models import Organisation, Property
+from .models import (
+    Organisation,
+    OrganisationSubscription,
+    Property,
+)
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
     list_display = (
@@ -35,3 +39,22 @@ class OrganisationAdmin(admin.ModelAdmin):
     prepopulated_fields = {
         "slug": ("name",),
     }
+@admin.register(OrganisationSubscription)
+class OrganisationSubscriptionAdmin(
+    admin.ModelAdmin
+):
+    list_display = (
+        "organisation",
+        "plan",
+        "status",
+        "property_limit",
+        "member_limit",
+        "current_period_ends_at",
+    )
+    list_filter = (
+        "plan",
+        "status",
+    )
+    search_fields = (
+        "organisation__name",
+    )

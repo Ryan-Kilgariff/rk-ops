@@ -434,6 +434,38 @@
         .notification-dropdown-footer:hover {
             background: #f3f4f6;
         }
+        .subscription-warning {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 13px 16px;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 10px;
+            color: #9a3412;
+            font-size: 13px;
+        }
+        .subscription-warning strong {
+            display: block;
+            margin-bottom: 2px;
+        }
+        .subscription-warning a {
+            flex: 0 0 auto;
+            color: #9a3412;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .subscription-warning a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 650px) {
+            .subscription-warning {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+        }
     </style>
     {% block extra_css %}
     {% endblock %}
@@ -468,50 +500,52 @@
             {% endif %}
         </div>
         <nav class="nav">
-            <a
-                href="{% url 'operations:dashboard' property.slug %}"
-                class="nav-link {% if active_page == 'dashboard' %}active{% endif %}"
-            >
-                Dashboard
-            </a>
-            <a
-                href="{% url 'operations:task_list' property.slug %}"
-                class="nav-link {% if active_page == 'tasks' %}active{% endif %}"
-            >
-                Tasks
-            </a>
-            <a
-                href="{% url 'operations:issue_list' property.slug %}"
-                class="nav-link {% if active_page == 'issues' %}active{% endif %}"
-            >
-                Issues
-            </a>
-            <a
-                href="{% url 'operations:handover_list' property.slug %}"
-                class="nav-link {% if active_page == 'handover' %}active{% endif %}"
-            >
-                Handover
-            </a>
-            <a
-                href="{% url 'operations:activity_list' property.slug %}"
-                class="nav-link {% if active_page == 'activity' %}active{% endif %}"
-            >
-                Activity
-            </a>
-            <a
-                href="{% url 'operations:checklist_list' property.slug %}"
-                class="nav-link {% if active_page == 'checklists' %}active{% endif %}"
-            >
-                Checklists
-            </a>
-            {% if can_manage_team %}
+            {% if property %}
                 <a
-                    href="{% url 'operations:team_list' property.slug %}"
-                    class="nav-link {% if active_page == 'team' %}active{% endif %}"
+                    href="{% url 'operations:dashboard' property.slug %}"
+                    class="nav-link {% if active_page == 'dashboard' %}active{% endif %}"
                 >
-                    Team
+                    Dashboard
                 </a>
-            {% endif %}   
+                <a
+                    href="{% url 'operations:task_list' property.slug %}"
+                    class="nav-link {% if active_page == 'tasks' %}active{% endif %}"
+                >
+                    Tasks
+                </a>
+                <a
+                    href="{% url 'operations:issue_list' property.slug %}"
+                    class="nav-link {% if active_page == 'issues' %}active{% endif %}"
+                >
+                    Issues
+                </a>
+                <a
+                    href="{% url 'operations:handover_list' property.slug %}"
+                    class="nav-link {% if active_page == 'handover' %}active{% endif %}"
+                >
+                    Handover
+                </a>
+                <a
+                    href="{% url 'operations:activity_list' property.slug %}"
+                    class="nav-link {% if active_page == 'activity' %}active{% endif %}"
+                >
+                    Activity
+                </a>
+                <a
+                    href="{% url 'operations:checklist_list' property.slug %}"
+                    class="nav-link {% if active_page == 'checklists' %}active{% endif %}"
+                >
+                    Checklists
+                </a>
+                {% if can_manage_team %}
+                    <a
+                        href="{% url 'operations:team_list' property.slug %}"
+                        class="nav-link {% if active_page == 'team' %}active{% endif %}"
+                    >
+                        Team
+                    </a>
+                {% endif %}  
+            {% endif %} 
             <div class="nav-divider"></div> 
             <a
                 href="#"
@@ -521,7 +555,7 @@
             </a>
             {% if property and property.organisation %}
                 <a
-                    href="{% url 'operations:organisation_account' property.organisation.slug %}"
+                    href="{% url 'operations:account_home' %}"
                     class="nav-link {% if active_page == 'account' %}active{% endif %}"
                 >
                     Account
@@ -631,6 +665,24 @@
             </div>
         </header>
         <main class="content">
+            {% if subscription_warning %}
+                <div class="subscription-warning">
+                    <div>
+                        <strong>
+                            Subscription payment requires attention.
+                        </strong>
+                        RK Ops access is currently continuing,
+                        but billing should be reviewed.
+                    </div>
+                    {% if property.organisation %}
+                        <a
+                            href="{% url 'operations:organisation_account' property.organisation.slug %}"
+                        >
+                            View account
+                        </a>
+                    {% endif %}
+                </div>
+            {% endif %}
             {% block content %}
             {% endblock %}
         </main>
