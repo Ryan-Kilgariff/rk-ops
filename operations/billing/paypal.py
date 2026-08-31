@@ -303,3 +303,69 @@ class PayPalBillingAdapter(
         )
         response.raise_for_status()
         return response.json()
+    def verify_webhook(
+        self,
+        *,
+        headers,
+        event,
+    ):
+        webhook_id = (
+            settings.PAYPAL_WEBHOOK_ID
+        )
+        if not webhook_id:
+            raise ValueError(
+                "PAYPAL_WEBHOOK_ID "
+                "is not configured."
+            )
+        payload = {
+            "auth_algo": (
+                headers.get(
+                    "PAYPAL-AUTH-ALGO",
+                    "",
+                )
+            ),
+            "cert_url": (
+                headers.get(
+                    "PAYPAL-CERT-URL",
+                    "",
+                )
+            ),
+            "transmission_id": (
+                headers.get(
+                    "PAYPAL-TRANSMISSION-ID",
+                    "",
+                )
+            ),
+            "transmission_sig": (
+                headers.get(
+                    "PAYPAL-TRANSMISSION-SIG",
+                    "",
+                )
+            ),
+            "transmission_time": (
+                headers.get(
+                    "PAYPAL-TRANSMISSION-TIME",
+                    "",
+                )
+            ),
+            "webhook_id": webhook_id,
+            "webhook_event": event,
+        }
+        response = requests.post(
+            (
+                f"{self.base_url}"
+                "/v1/notifications/"
+                "verify-webhook-signature"
+            ),
+            headers=self._headers(),
+            json=payload,
+            timeout=20,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return (
+            data.get(
+                "verification_status"
+            )
+            == "SUCCESS"
+        )

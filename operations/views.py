@@ -80,8 +80,13 @@ from operations.services import (
     create_billing_session,
     log_billing_event,
 )
+from operations.billing.paypal import (
+    PayPalBillingAdapter,
+)
 from django.contrib import messages
 from django.utils import timezone
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 User = get_user_model()
 @login_required
 def dashboard(request, property_slug):
@@ -3506,4 +3511,80 @@ def paypal_billing_cancel(
     return redirect(
         "operations:organisation_account",
         organisation_slug=organisation.slug,
+    )
+@csrf_exempt
+def paypal_webhook(request):
+    if request.method != "POST":
+        return JsonResponse(
+            {
+                "detail": "Method not allowed."
+            },
+            status=405,
+        )
+    try:
+        event = json.loads(
+            request.body.decode("utf-8")
+        )
+    except (
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ):
+        return JsonResponse(
+            {
+                "detail": "Invalid JSON."
+            },
+            status=400,
+        )
+    adapter = PayPalBillingAdapter()
+    try:
+        verified = adapter.verify_webhook(
+            headers=request.headers,
+            event=event,
+        )
+    except Exception as exc:
+        print(
+            "PAYPAL WEBHOOK "
+            "VERIFICATION ERROR:",
+            exc,
+        )
+        return JsonResponse(
+            {
+                "detail": (
+                    "Webhook verification "
+                    "failed."
+                )
+            },
+            status=400,
+        )
+    if not verified:
+        return JsonResponse(
+            {
+                "detail": (
+                    "Invalid PayPal "
+                    "webhook signature."
+                )
+            },
+            status=400,
+        )
+    event_type = event.get(
+        "event_type",
+        "",
+    )
+    event_id = event.get(
+        "id",
+        "",
+    )
+    resource = event.get(
+        "resource",
+        {},
+    )
+    print(
+        "PAYPAL WEBHOOK:",
+        event_type,
+        event_id,
+    )
+    return JsonResponse(
+        {
+            "received": True,
+        }
     )

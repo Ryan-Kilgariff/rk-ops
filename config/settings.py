@@ -27,9 +27,11 @@ SECRET_KEY = 'django-insecure-6goaicrwd-*qg1zl!*6wxua!pokr6l$-_5%s_yrxm)r5!xd!z3
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
-
-
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    ".ngrok-free.dev",
+]
 # Application definition
 
 INSTALLED_APPS = [
@@ -170,5 +172,9 @@ PAYPAL_GROWTH_PLAN_ID = os.getenv(
 )
 PAYPAL_PRO_PLAN_ID = os.getenv(
     "PAYPAL_PRO_PLAN_ID",
+    "",
+)
+PAYPAL_WEBHOOK_ID = os.getenv(
+    "PAYPAL_WEBHOOK_ID",
     "",
 )

@@ -288,4 +288,9 @@ urlpatterns = [
         views.paypal_billing_cancel,
         name="paypal_billing_cancel",
     ),
+    path(
+        "billing/paypal/webhook/",
+        views.paypal_webhook,
+        name="paypal_webhook",
+    ),
 ]
