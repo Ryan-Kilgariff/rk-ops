@@ -1,0 +1,116 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Cancel Subscription
+{% endblock %}
+{% block topbar_title %}
+Cancel Subscription
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Subscription
+</p>
+<h1 class="page-title">
+    Cancel RK Ops
+</h1>
+<p class="page-subtitle">
+    Confirm cancellation for {{ organisation.name }}.
+</p>
+<div class="confirm-card">
+    <div class="confirm-warning">
+        <strong>
+            Operational access will be disabled.
+        </strong>
+        <p>
+            Your organisation and account information
+            will remain available, but property
+            dashboards and operational tools will no
+            longer be accessible.
+        </p>
+    </div>
+    <div class="confirm-summary">
+        <div>
+            <span>Organisation</span>
+            <strong>
+                {{ organisation.name }}
+            </strong>
+        </div>
+        <div>
+            <span>Current plan</span>
+            <strong>
+                {{ subscription.get_plan_display }}
+            </strong>
+        </div>
+        <div>
+            <span>Current status</span>
+            <strong>
+                {{ subscription.get_status_display }}
+            </strong>
+        </div>
+    </div>
+    <div class="confirm-actions">
+        <a
+            href="{% url 'operations:organisation_account' organisation.slug %}"
+            class="button secondary-action"
+        >
+            Keep Subscription
+        </a>
+        <form
+            method="post"
+            action="{% url 'operations:organisation_subscription_cancel' organisation.slug %}"
+        >
+            {% csrf_token %}
+            <button
+                type="submit"
+                class="button danger-action"
+            >
+                Confirm Cancellation
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block extra_css %}
+<style>
+.confirm-card {
+    max-width: 720px;
+    margin-top: 26px;
+    padding: 24px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+}
+.confirm-warning {
+    padding: 16px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    color: #991b1b;
+}
+.confirm-warning p {
+    margin: 6px 0 0;
+}
+.confirm-summary {
+    display: grid;
+    gap: 14px;
+    margin-top: 22px;
+}
+.confirm-summary > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+.confirm-summary span {
+    color: #6b7280;
+}
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+}
+.confirm-actions form {
+    margin: 0;
+}
+</style>
+{% endblock %}

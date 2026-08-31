@@ -3,7 +3,10 @@ from django.utils import timezone
 from .activity import log_activity
 from .models import ActivityLog, RecurringTask, Task
 from .notifications import create_notification
-from properties.models import OrganisationSubscription
+from properties.models import (
+    OrganisationSubscription,
+    OrganisationSubscriptionEvent,
+)
 def generate_recurring_tasks_for_date(
     target_date,
     property_obj=None,
@@ -215,12 +218,90 @@ def update_subscription_statuses():
         # SAVE CHANGE
         # ------------------------------------------
         if new_status != subscription.status:
-            subscription.status = new_status
-            subscription.save(
-                update_fields=[
-                    "status",
-                    "updated_at",
-                ]
+            if (
+                subscription.status
+                == OrganisationSubscription.Status.TRIAL
+            ):
+                reason = "Trial period expired."
+            elif (
+                subscription.status
+                == OrganisationSubscription.Status.ACTIVE
+            ):
+                reason = (
+                    "Subscription billing period expired."
+                )
+            else:
+                reason = (
+                    "Subscription status updated "
+                    "automatically."
+                )
+            changed = change_subscription_status(
+                subscription,
+                new_status,
+                reason=reason,
             )
-            updated_count += 1
+            if changed:
+                updated_count += 1
     return updated_count
+def change_subscription_status(
+    subscription,
+    new_status,
+    *,
+    reason="",
+    changed_by=None,
+):
+    previous_status = subscription.status
+    if previous_status == new_status:
+        return False
+    subscription.status = new_status
+    subscription.save(
+        update_fields=[
+            "status",
+            "updated_at",
+        ]
+    )
+    OrganisationSubscriptionEvent.objects.create(
+        organisation=subscription.organisation,
+        subscription=subscription,
+        event_type=(
+            OrganisationSubscriptionEvent
+            .EventType
+            .STATUS_CHANGE
+        ),
+        previous_status=previous_status,
+        new_status=new_status,
+        reason=reason,
+        changed_by=changed_by,
+    )
+    return True
+def change_subscription_plan(
+    subscription,
+    new_plan,
+    *,
+    reason="",
+    changed_by=None,
+):
+    previous_plan = subscription.plan
+    if previous_plan == new_plan:
+        return False
+    subscription.plan = new_plan
+    subscription.save(
+        update_fields=[
+            "plan",
+            "updated_at",
+        ]
+    )
+    OrganisationSubscriptionEvent.objects.create(
+        organisation=subscription.organisation,
+        subscription=subscription,
+        event_type=(
+            OrganisationSubscriptionEvent
+            .EventType
+            .PLAN_CHANGE
+        ),
+        previous_plan=previous_plan,
+        new_plan=new_plan,
+        reason=reason,
+        changed_by=changed_by,
+    )
+    return True

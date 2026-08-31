@@ -466,6 +466,37 @@
                 flex-direction: column;
             }
         }
+        .message-stack {
+            display: grid;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .app-message {
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .app-message-success {
+            background: #ecfdf5;
+            color: #047857;
+            border: 1px solid #a7f3d0;
+        }
+        .app-message-info {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+        .app-message-warning {
+            background: #fff7ed;
+            color: #c2410c;
+            border: 1px solid #fed7aa;
+        }
+        .app-message-error {
+            background: #fef2f2;
+            color: #b91c1c;
+            border: 1px solid #fecaca;
+        }
     </style>
     {% block extra_css %}
     {% endblock %}
@@ -681,6 +712,20 @@
                             View account
                         </a>
                     {% endif %}
+                </div>
+            {% endif %}
+            {% if messages %}
+                <div class="message-stack">
+                    {% for message in messages %}
+                        <div
+                            class="
+                                app-message
+                                app-message-{{ message.tags }}
+                            "
+                        >
+                            {{ message }}
+                        </div>
+                    {% endfor %}
                 </div>
             {% endif %}
             {% block content %}

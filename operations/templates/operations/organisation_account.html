@@ -26,13 +26,13 @@ Account
     </article>
     <article class="account-stat-card">
         <div class="account-stat-label">
-            Organisation Status
+            Account Status
         </div>
         <div class="account-stat-text">
-            {% if organisation.is_active %}
-                Active
+            {% if subscription %}
+                {{ subscription.get_status_display }}
             {% else %}
-                Inactive
+                Not configured
             {% endif %}
         </div>
     </article>
@@ -81,12 +81,18 @@ Account
             </div>
         </div>
         {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
-            <a
-                href="{% url 'operations:organisation_property_create' organisation.slug %}"
-                class="button"
-            >
-                + Add Property
-            </a>
+            {% if property_limit_reached %}
+                <span class="limit-reached-label">
+                    Property limit reached
+                </span>
+            {% else %}
+                <a
+                    href="{% url 'operations:organisation_property_create' organisation.slug %}"
+                    class="button"
+                >
+                    + Add Property
+                </a>
+            {% endif %}
         {% endif %}
     </div>
 <div class="account-list">
@@ -174,14 +180,34 @@ Account
                 People with access to this organisation
             </div>
         </div>
-        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
-            <a
-                href="{% url 'operations:organisation_invite_member' organisation.slug %}"
-                class="button"
-            >
-                + Invite Member
-            </a>
-        {% endif %}
+        <div class="section-header-actions">
+            <div class="member-usage-summary">
+                <strong>
+                    {{ allocated_member_count }}
+                    /
+                    {{ member_limit }}
+                </strong>
+                <span>
+                    {{ active_member_count }} active
+                    ·
+                    {{ pending_invitation_count }} pending
+                </span>
+            </div>
+            {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+                {% if member_limit_reached %}
+                    <span class="limit-reached-label">
+                        Member limit reached
+                    </span>
+                {% else %}
+                    <a
+                        href="{% url 'operations:organisation_invite_member' organisation.slug %}"
+                        class="button"
+                    >
+                        + Invite Member
+                    </a>
+                {% endif %}
+            {% endif %}
+        </div>
     </div>
     <div class="account-list">
         {% for member in organisation_memberships %}
@@ -393,7 +419,221 @@ Account
             </div>
         {% endif %}
     </div>
+{% if subscription %}
+    <div class="plan-usage-card">
+        <div class="plan-usage-header">
+            <div>
+                <h3>
+                    Plan Usage
+                </h3>
+                <div class="task-meta">
+                    Current usage for
+                    {{ subscription.get_plan_display }}
+                </div>
+            </div>
+        </div>
+        <div class="usage-item">
+            <div class="usage-item-header">
+                <strong>
+                    Properties
+                </strong>
+                <span>
+                    {{ property_count }}
+                    /
+                    {{ property_limit }}
+                </span>
+            </div>
+            <div class="usage-track">
+                <div
+                    class="usage-bar"
+                    style="width: {{ property_usage_width }}%;"
+                ></div>
+            </div>
+            {% if property_limit_reached %}
+                <div class="usage-warning">
+                    Property limit reached.
+                </div>
+            {% endif %}
+        </div>
+        <div class="usage-item">
+            <div class="usage-item-header">
+                <strong>
+                    Team Members
+                </strong>
+                <span>
+                    {{ active_member_count }}
+                    /
+                    {{ member_limit }}
+                </span>
+            </div>
+            <div class="usage-track">
+                <div
+                    class="usage-bar"
+                    style="width: {{ member_usage_width }}%;"
+                ></div>
+            </div>
+            {% if member_limit_reached %}
+                <div class="usage-warning">
+                    Team member limit reached.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endif %}
+{% if subscription %}
+    {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+        <div class="plan-selector-card">
+            <div class="plan-selector-header">
+                <h3>
+                    Available Plans
+                </h3>
+                <div class="task-meta">
+                    Choose the RK Ops plan that fits
+                    your organisation.
+                </div>
+            </div>
+            <div class="plan-options">
+                {% for plan in available_plans %}
+                    <div
+                        class="
+                            plan-option
+                            {% if plan.is_current %}
+                                plan-option-current
+                            {% endif %}
+                        "
+                    >
+                        <div class="plan-option-main">
+                            <div class="plan-option-heading">
+                                <div>
+                                    <div class="plan-option-name">
+                                        {{ plan.label }}
+                                    </div>
+                                    <div class="plan-price">
+                                        £{{ plan.monthly_price }}
+                                        <span>/ month</span>
+                                    </div>
+                                </div>
+                                {% if plan.is_current %}
+                                    <span class="current-plan-label">
+                                        Current Plan
+                                    </span>
+                                {% endif %}
+                            </div>
+                            <div class="task-meta">
+                                {{ plan.property_limit }}
+                                propert{{ plan.property_limit|pluralize:"y,ies" }}
+                                ·
+                                {{ plan.member_limit }}
+                                team member{{ plan.member_limit|pluralize }}
+                            </div>
+                            <div class="plan-feature-list">
+                                {% for feature in plan.features %}
+                                    <div class="plan-feature">
+                                        ✓ {{ feature }}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            {% if subscription.billing_provider %}
+                                <div class="task-meta plan-billing">
+                                    Billing:
+                                    {{ subscription.get_billing_provider_display }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        {% if not plan.is_current %}
+                            <a
+                                href="{% url 'operations:organisation_subscription_change_plan_confirm' organisation.slug plan.value %}"
+                                class="button secondary-action"
+                            >
+                                Select {{ plan.label }}
+                            </a>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endif %}
+    {% if subscription %}
+        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+            <div class="subscription-actions">
+                {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
+                    <form
+                        method="post"
+                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="button"
+                        >
+                            Reactivate Subscription
+                        </button>
+                    </form>
+                {% else %}
+                    <a
+                        href="{% url 'operations:organisation_subscription_cancel_confirm' organisation.slug %}"
+                        class="button danger-action"
+                    >
+                        Cancel Subscription
+                    </a>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% endif %}
 </section>
+{% if subscription_events %}
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Subscription History
+            </h2>
+            <div class="task-meta">
+                Recent changes to this account
+            </div>
+        </div>
+    </div>
+    <div class="account-list">
+        {% for event in subscription_events %}
+            <div class="account-list-item">
+                <div>
+                    <div class="task-meta">
+                        <strong>
+                            {% if event.event_type == "plan_change" %}
+                                {{ event.get_previous_plan_display }}
+                                →
+                                {{ event.get_new_plan_display }}
+                            {% else %}
+                                {{ event.get_previous_status_display }}
+                                →
+                                {{ event.get_new_status_display }}
+                            {% endif %}
+                        </strong>
+                    </div>
+                    {% if event.reason %}
+                        <div class="task-meta">
+                            {{ event.reason }}
+                        </div>
+                    {% endif %}
+                    <div class="task-meta">
+                        {{ event.created_at|date:"d M Y · H:i" }}
+                        {% if event.changed_by %}
+                            ·
+                            {% if event.changed_by.get_full_name %}
+                                {{ event.changed_by.get_full_name }}
+                            {% else %}
+                                {{ event.changed_by.username }}
+                            {% endif %}
+                        {% else %}
+                            · Automated
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
 {% endblock %}
 {% block extra_css %}
 <style>
@@ -599,6 +839,174 @@ a.account-list-item:hover {
     color: #b91c1c;
     font-size: 12px;
     font-weight: 700;
+}
+.subscription-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 14px;
+}
+.subscription-actions form {
+    margin: 0;
+}
+.plan-usage-card {
+    margin-top: 16px;
+    padding: 20px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+.plan-usage-header {
+    margin-bottom: 20px;
+}
+.plan-usage-header h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+}
+.usage-item {
+    margin-top: 18px;
+}
+.usage-item:first-of-type {
+    margin-top: 0;
+}
+.usage-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 7px;
+    font-size: 13px;
+}
+.usage-track {
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    background: #e5e7eb;
+    border-radius: 999px;
+}
+.usage-bar {
+    height: 100%;
+    background: #111827;
+    border-radius: inherit;
+}
+.usage-warning {
+    margin-top: 7px;
+    color: #b91c1c;
+    font-size: 12px;
+    font-weight: 700;
+}
+.limit-reached-label {
+    padding: 6px 10px;
+    background: #f3f4f6;
+    border-radius: 8px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 700;
+}
+.plan-selector-card {
+    margin-top: 16px;
+    padding: 20px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+}
+.plan-selector-header {
+    margin-bottom: 18px;
+}
+.plan-selector-header h3 {
+    margin: 0 0 4px;
+    font-size: 16px;
+}
+.plan-option-current {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+.current-plan-label {
+    display: inline-flex;
+    padding: 5px 9px;
+    background: #ecfdf5;
+    border-radius: 999px;
+    color: #047857;
+    font-size: 11px;
+    font-weight: 800;
+}
+.plan-option-main {
+    min-width: 0;
+}
+.plan-option-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+.section-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 20px;
+}
+.member-usage-summary {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    white-space: nowrap;
+}
+.member-usage-summary strong {
+    font-size: 14px;
+}
+.member-usage-summary span {
+    color: #6b7280;
+    font-size: 13px;
+}
+@media (max-width: 750px) {
+    .section-header-actions {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+.plan-option {
+    display: grid;
+    gap: 20px;
+    padding: 24px;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+}
+.plan-option-name {
+    margin-bottom: 6px;
+    font-size: 18px;
+    font-weight: 800;
+}
+.plan-price {
+    margin-top: 8px;
+    margin-bottom: 6px;
+    font-size: 28px;
+    font-weight: 800;
+}
+.plan-price span {
+    font-size: 13px;
+}
+.plan-feature-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 18px;
+    margin-bottom: 4px;
+}
+.plan-feature {
+    font-size: 13px;
+    line-height: 1.4;
+}
+.plan-billing {
+    margin-top: 10px;
+}
+.plan-option form,
+.plan-option > a {
+    margin-top: 4px;
+}
+.plan-option .button {
+    width: fit-content;
+    min-width: 180px;
 }
 </style>
 {% endblock %}

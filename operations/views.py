@@ -66,6 +66,12 @@ from accounts.forms import (
     InvitationSignupForm,
     OrganisationInvitationForm,
 )
+from operations.services import (
+    change_subscription_plan,
+    change_subscription_status,
+)
+from django.contrib import messages
+from django.utils import timezone
 User = get_user_model()
 @login_required
 def dashboard(request, property_slug):
@@ -2093,6 +2099,15 @@ def organisation_account(
         "subscription",
         None,
     )
+    subscription_events = (
+        organisation.subscription_events
+        .select_related(
+            "changed_by",
+        )
+        .order_by(
+            "-created_at",
+        )[:10]
+    )
     pending_invitations = (
         OrganisationInvitation.objects
         .filter(
@@ -2119,6 +2134,115 @@ def organisation_account(
             "user__username",
         )
     )
+    available_plans = []
+    for plan_value, plan_label in (
+        OrganisationSubscription.Plan.choices
+    ):
+        config = (
+            OrganisationSubscription.PLAN_CONFIG[
+                plan_value
+            ]
+        )
+        if not config["public"]:
+            continue
+        available_plans.append(
+            {
+                "value": plan_value,
+                "label": plan_label,
+                "monthly_price": (
+                    config["monthly_price"]
+                ),
+                "property_limit": (
+                    config["property_limit"]
+                ),
+                "member_limit": (
+                    config["member_limit"]
+                ),
+                "features": (
+                    config["features"]
+                ),
+                "is_current": (
+                    subscription
+                    and
+                    subscription.plan == plan_value
+                ),
+            }
+        )
+    property_count = (
+        organisation.properties
+        .filter(
+            is_active=True,
+        )
+        .count()
+    )
+    active_member_count = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+        )
+        .count()
+    )
+    pending_invitation_count = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+            accepted_at__isnull=True,
+        )
+        .count()
+    )
+    allocated_member_count = (
+        active_member_count
+        + pending_invitation_count
+    )
+    if subscription:
+        property_limit = subscription.property_limit
+        member_limit = subscription.member_limit
+        property_usage_percent = (
+            round(
+                (
+                    property_count
+                    / property_limit
+                )
+                * 100
+            )
+            if property_limit
+            else 0
+        )
+        member_usage_percent = (
+            round(
+                (
+                    active_member_count
+                    / member_limit
+                )
+                * 100
+            )
+            if member_limit
+            else 0
+        )
+        property_limit_reached = (
+            property_count >= property_limit
+        )
+        member_limit_reached = (
+            active_member_count >= member_limit
+        )
+    else:
+        property_limit = 0
+        member_limit = 0
+        property_usage_percent = 0
+        member_usage_percent = 0
+        property_limit_reached = False
+        member_limit_reached = False
+    property_usage_width = min(
+        property_usage_percent,
+        100,
+    )
+
+    member_usage_width = min(
+        member_usage_percent,
+        100,
+    )
     current_property = properties.first()
     context = {
         "organisation": organisation,
@@ -2130,6 +2254,19 @@ def organisation_account(
         "active_page": "account",
         "pending_invitations": pending_invitations,
         "subscription": subscription,
+        "subscription_events": subscription_events,
+        "active_member_count": active_member_count,
+        "property_limit": property_limit,
+        "member_limit": member_limit,
+        "property_usage_percent": property_usage_percent,
+        "member_usage_percent": member_usage_percent,
+        "property_limit_reached": property_limit_reached,
+        "member_limit_reached": member_limit_reached,
+        "pending_invitation_count": pending_invitation_count,
+        "allocated_member_count": allocated_member_count,
+        "property_usage_width": property_usage_width,
+        "member_usage_width": member_usage_width,
+        "available_plans": available_plans,
     }
     return render(
         request,
@@ -2773,6 +2910,396 @@ def account_home(request):
         "operations/account_home.html",
         {
             "organisations": organisations,
+            "active_page": "account",
+        },
+    )
+@login_required
+@require_POST
+def organisation_subscription_cancel(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        raise PermissionDenied(
+            "This organisation does not have "
+            "a subscription."
+        )
+    if subscription.status in {
+        OrganisationSubscription.Status.CANCELLED,
+        OrganisationSubscription.Status.SUSPENDED,
+    }:
+        messages.info(
+            request,
+            "This subscription is already inactive.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    subscription.cancelled_at = timezone.now()
+    subscription.current_period_ends_at = None
+    subscription.save(
+        update_fields=[
+            "cancelled_at",
+            "current_period_ends_at",
+            "updated_at",
+        ]
+    )
+    change_subscription_status(
+        subscription,
+        OrganisationSubscription.Status.CANCELLED,
+        reason="Subscription cancelled by account administrator.",
+        changed_by=request.user,
+    )
+    messages.success(
+        request,
+        "The RK Ops subscription has been cancelled.",
+    )
+    return redirect(
+        "operations:organisation_account",
+        organisation_slug=organisation.slug,
+    )
+@login_required
+@require_POST
+def organisation_subscription_reactivate(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        raise PermissionDenied(
+            "This organisation does not have "
+            "a subscription."
+        )
+    if subscription.status not in {
+        OrganisationSubscription.Status.CANCELLED,
+        OrganisationSubscription.Status.SUSPENDED,
+    }:
+        messages.info(
+            request,
+            "This subscription is already active.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    subscription.cancelled_at = None
+    subscription.save(
+        update_fields=[
+            "cancelled_at",
+            "updated_at",
+        ]
+    )
+    change_subscription_status(
+        subscription,
+        OrganisationSubscription.Status.ACTIVE,
+        reason="Subscription reactivated by account administrator.",
+        changed_by=request.user,
+    )
+    messages.success(
+        request,
+        "The RK Ops subscription has been reactivated.",
+    )
+    return redirect(
+        "operations:organisation_account",
+        organisation_slug=organisation.slug,
+    )
+@login_required
+def organisation_subscription_cancel_confirm(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        raise PermissionDenied(
+            "This organisation does not have "
+            "a subscription."
+        )
+    return render(
+        request,
+        "operations/subscription_cancel_confirm.html",
+        {
+            "organisation": organisation,
+            "subscription": subscription,
+            "active_page": "account",
+        },
+    )
+@login_required
+@require_POST
+def organisation_subscription_change_plan(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    new_plan = request.POST.get("plan")
+    valid_plans = {
+        choice[0]
+        for choice in OrganisationSubscription.Plan.choices
+    }
+    if new_plan not in valid_plans:
+        raise PermissionDenied(
+            "Invalid subscription plan."
+        )
+    new_config = OrganisationSubscription.PLAN_CONFIG[
+        new_plan
+    ]
+    if not new_config["public"]:
+        raise PermissionDenied(
+            "This subscription plan cannot be selected directly."
+        )
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        raise PermissionDenied(
+            "This organisation does not have "
+            "a subscription."
+        )
+    # ------------------------------------------
+    # CURRENT USAGE
+    # ------------------------------------------
+    property_count = (
+        organisation.properties
+        .filter(
+            is_active=True,
+        )
+        .count()
+    )
+    active_member_count = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+        )
+        .count()
+    )
+    pending_invitation_count = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+            accepted_at__isnull=True,
+        )
+        .count()
+    )
+    allocated_member_count = (
+        active_member_count
+        + pending_invitation_count
+    )
+    # ------------------------------------------
+    # NEW PLAN LIMITS
+    # ------------------------------------------
+    new_config = (
+        OrganisationSubscription.PLAN_CONFIG[
+            new_plan
+        ]
+    )
+    new_property_limit = (
+        new_config["property_limit"]
+    )
+    new_member_limit = (
+        new_config["member_limit"]
+    )
+    # ------------------------------------------
+    # DOWNGRADE SAFETY
+    # ------------------------------------------
+    if property_count > new_property_limit:
+        messages.error(
+            request,
+            (
+                "This plan cannot be selected because "
+                f"the organisation currently has "
+                f"{property_count} active properties."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    if allocated_member_count > new_member_limit:
+        messages.error(
+            request,
+            (
+                "This plan cannot be selected because "
+                f"the organisation currently has "
+                f"{allocated_member_count} allocated "
+                "team member places."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    # ------------------------------------------
+    # NO CHANGE
+    # ------------------------------------------
+    if subscription.plan == new_plan:
+        messages.info(
+            request,
+            "This is already your current plan.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    # ------------------------------------------
+    # CHANGE PLAN
+    # ------------------------------------------
+    previous_plan = (
+        subscription.get_plan_display()
+    )
+    change_subscription_plan(
+        subscription,
+        new_plan,
+        reason=(
+            "Subscription plan changed "
+            "by account administrator."
+        ),
+        changed_by=request.user,
+    )
+    messages.success(
+        request,
+        (
+            f"Subscription changed from "
+            f"{previous_plan} to "
+            f"{subscription.get_plan_display()}."
+        ),
+    )
+    return redirect(
+        "operations:organisation_account",
+        organisation_slug=organisation.slug,
+    )
+@login_required
+def organisation_subscription_change_plan_confirm(
+    request,
+    organisation_slug,
+    plan_value,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        raise PermissionDenied(
+            "This organisation does not have "
+            "a subscription."
+        )
+    valid_plans = {
+        choice[0]
+        for choice in OrganisationSubscription.Plan.choices
+    }
+    if plan_value not in valid_plans:
+        raise PermissionDenied(
+            "Invalid subscription plan."
+        )
+    plan_config = (
+        OrganisationSubscription.PLAN_CONFIG[
+            plan_value
+        ]
+    )
+    if not plan_config["public"]:
+        raise PermissionDenied(
+            "This subscription plan cannot "
+            "be selected directly."
+        )
+    property_count = (
+        organisation.properties
+        .filter(
+            is_active=True,
+        )
+        .count()
+    )
+    active_member_count = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+        )
+        .count()
+    )
+    pending_invitation_count = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+            accepted_at__isnull=True,
+        )
+        .count()
+    )
+    allocated_member_count = (
+        active_member_count
+        + pending_invitation_count
+    )
+    can_change_plan = True
+    blocking_reason = ""
+    if (
+        property_count
+        > plan_config["property_limit"]
+    ):
+        can_change_plan = False
+        blocking_reason = (
+            "This plan supports "
+            f"{plan_config['property_limit']} "
+            "properties, but this organisation "
+            f"currently has {property_count}."
+        )
+    elif (
+        allocated_member_count
+        > plan_config["member_limit"]
+    ):
+        can_change_plan = False
+        blocking_reason = (
+            "This plan supports "
+            f"{plan_config['member_limit']} "
+            "team members, but this organisation "
+            f"currently has {allocated_member_count} "
+            "allocated places."
+        )
+    return render(
+        request,
+        "operations/subscription_change_plan_confirm.html",
+        {
+            "organisation": organisation,
+            "subscription": subscription,
+            "plan_value": plan_value,
+            "plan_label": dict(
+                OrganisationSubscription.Plan.choices
+            )[plan_value],
+            "plan_config": plan_config,
+            "property_count": property_count,
+            "allocated_member_count": allocated_member_count,
+            "can_change_plan": can_change_plan,
+            "blocking_reason": blocking_reason,
             "active_page": "account",
         },
     )

@@ -248,4 +248,29 @@ urlpatterns = [
         views.account_home,
         name="account_home",
     ),
+    path(
+        "account/<slug:organisation_slug>/subscription/cancel/",
+        views.organisation_subscription_cancel,
+        name="organisation_subscription_cancel",
+    ),
+    path(
+        "account/<slug:organisation_slug>/subscription/reactivate/",
+        views.organisation_subscription_reactivate,
+        name="organisation_subscription_reactivate",
+    ),
+    path(
+        "account/<slug:organisation_slug>/subscription/cancel/confirm/",
+        views.organisation_subscription_cancel_confirm,
+        name="organisation_subscription_cancel_confirm",
+    ),
+    path(
+        "account/<slug:organisation_slug>/subscription/change-plan/",
+        views.organisation_subscription_change_plan,
+        name="organisation_subscription_change_plan",
+    ),
+    path(
+        "account/<slug:organisation_slug>/subscription/change-plan/<str:plan_value>/confirm/",
+        views.organisation_subscription_change_plan_confirm,
+        name="organisation_subscription_change_plan_confirm",
+    ),
 ]
