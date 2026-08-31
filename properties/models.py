@@ -270,6 +270,182 @@ class OrganisationSubscriptionEvent(
             f"{self.previous_status} → "
             f"{self.new_status}"
         )
+class OrganisationBillingEvent(models.Model):
+    class EventType(models.TextChoices):
+        PAYMENT_SUCCEEDED = (
+            "payment_succeeded",
+            "Payment Succeeded",
+        )
+        PAYMENT_FAILED = (
+            "payment_failed",
+            "Payment Failed",
+        )
+        INVOICE_CREATED = (
+            "invoice_created",
+            "Invoice Created",
+        )
+        INVOICE_PAID = (
+            "invoice_paid",
+            "Invoice Paid",
+        )
+        REFUND_ISSUED = (
+            "refund_issued",
+            "Refund Issued",
+        )
+        CHECKOUT_CREATED = (
+            "checkout_created",
+            "Checkout Created",
+        )
+        PROVIDER_EVENT = (
+            "provider_event",
+            "Provider Event",
+        )
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.CASCADE,
+        related_name="billing_events",
+    )
+    subscription = models.ForeignKey(
+        OrganisationSubscription,
+        on_delete=models.CASCADE,
+        related_name="billing_events",
+    )
+    event_type = models.CharField(
+        max_length=40,
+        choices=EventType.choices,
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    currency = models.CharField(
+        max_length=10,
+        default="GBP",
+    )
+    provider = models.CharField(
+        max_length=20,
+        choices=OrganisationSubscription
+        .BillingProvider
+        .choices,
+        default=OrganisationSubscription
+        .BillingProvider
+        .MANUAL,
+    )
+    provider_event_id = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+    provider_reference = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+    class Meta:
+        ordering = [
+            "-created_at",
+        ]
+    def __str__(self):
+        return (
+            f"{self.organisation.name}: "
+            f"{self.get_event_type_display()}"
+        )
+class OrganisationBillingSession(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        COMPLETED = "completed", "Completed"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+        EXPIRED = "expired", "Expired"
+    organisation = models.ForeignKey(
+        Organisation,
+        on_delete=models.CASCADE,
+        related_name="billing_sessions",
+    )
+    subscription = models.ForeignKey(
+        OrganisationSubscription,
+        on_delete=models.CASCADE,
+        related_name="billing_sessions",
+    )
+    requested_plan = models.CharField(
+        max_length=30,
+        choices=OrganisationSubscription.Plan.choices,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    currency = models.CharField(
+        max_length=10,
+        default="GBP",
+    )
+    provider = models.CharField(
+        max_length=20,
+        choices=OrganisationSubscription
+        .BillingProvider
+        .choices,
+        default=OrganisationSubscription
+        .BillingProvider
+        .MANUAL,
+    )
+    provider_session_id = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+    provider_checkout_url = models.URLField(
+        max_length=1000,
+        blank=True,
+    )
+    provider_reference = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+    )
+    expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+    class Meta:
+        ordering = [
+            "-created_at",
+        ]
+    def __str__(self):
+        return (
+            f"{self.organisation.name}: "
+            f"{self.get_requested_plan_display()} "
+            f"({self.get_status_display()})"
+        )
 class Property(models.Model):
     name = models.CharField(max_length=150)
     slug = models.SlugField(unique=True)

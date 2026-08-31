@@ -1,6 +1,8 @@
 from django.contrib import admin
 from .models import (
     Organisation,
+    OrganisationBillingEvent,
+    OrganisationBillingSession,
     OrganisationSubscription,
     OrganisationSubscriptionEvent,
     Property,
@@ -132,4 +134,81 @@ class OrganisationSubscriptionEventAdmin(
         "reason",
         "changed_by",
         "created_at",
+    )
+@admin.register(OrganisationBillingEvent)
+class OrganisationBillingEventAdmin(
+    admin.ModelAdmin
+):
+    list_display = (
+        "organisation",
+        "event_type",
+        "amount",
+        "currency",
+        "provider",
+        "created_at",
+    )
+    list_filter = (
+        "event_type",
+        "provider",
+        "created_at",
+    )
+    search_fields = (
+        "organisation__name",
+        "provider_event_id",
+        "provider_reference",
+        "description",
+    )
+    readonly_fields = (
+        "organisation",
+        "subscription",
+        "event_type",
+        "amount",
+        "currency",
+        "provider",
+        "provider_event_id",
+        "provider_reference",
+        "description",
+        "metadata",
+        "created_at",
+    )
+@admin.register(OrganisationBillingSession)
+class OrganisationBillingSessionAdmin(
+    admin.ModelAdmin
+):
+    list_display = (
+        "organisation",
+        "requested_plan",
+        "status",
+        "amount",
+        "currency",
+        "provider",
+        "created_at",
+    )
+    list_filter = (
+        "status",
+        "provider",
+        "requested_plan",
+        "created_at",
+    )
+    search_fields = (
+        "organisation__name",
+        "provider_session_id",
+        "provider_reference",
+    )
+    readonly_fields = (
+        "organisation",
+        "subscription",
+        "requested_plan",
+        "status",
+        "amount",
+        "currency",
+        "provider",
+        "provider_session_id",
+        "provider_checkout_url",
+        "provider_reference",
+        "metadata",
+        "expires_at",
+        "completed_at",
+        "created_at",
+        "updated_at",
     )

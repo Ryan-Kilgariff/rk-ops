@@ -4,8 +4,13 @@ from .activity import log_activity
 from .models import ActivityLog, RecurringTask, Task
 from .notifications import create_notification
 from properties.models import (
+    OrganisationBillingSession,
+    OrganisationBillingEvent,
     OrganisationSubscription,
     OrganisationSubscriptionEvent,
+)
+from operations.billing import (
+    get_billing_adapter,
 )
 def generate_recurring_tasks_for_date(
     target_date,
@@ -178,6 +183,30 @@ def update_task_escalations(property_obj=None):
                 )
             updated_count += 1
     return updated_count
+def mark_subscription_past_due(
+    subscription,
+    *,
+    reason="Subscription payment is past due.",
+    changed_by=None,
+):
+    return change_subscription_status(
+        subscription,
+        OrganisationSubscription.Status.PAST_DUE,
+        reason=reason,
+        changed_by=changed_by,
+    )
+def suspend_subscription(
+    subscription,
+    *,
+    reason="Subscription suspended.",
+    changed_by=None,
+):
+    return change_subscription_status(
+        subscription,
+        OrganisationSubscription.Status.SUSPENDED,
+        reason=reason,
+        changed_by=changed_by,
+    )
 def update_subscription_statuses():
     subscriptions = (
         OrganisationSubscription.objects
@@ -189,7 +218,6 @@ def update_subscription_statuses():
     now = timezone.now()
     updated_count = 0
     for subscription in subscriptions:
-        new_status = subscription.status
         # ------------------------------------------
         # TRIAL EXPIRY
         # ------------------------------------------
@@ -199,46 +227,27 @@ def update_subscription_statuses():
             and subscription.trial_ends_at
             and subscription.trial_ends_at <= now
         ):
-            new_status = (
-                OrganisationSubscription.Status.SUSPENDED
+            changed = suspend_subscription(
+                subscription,
+                reason="Trial period expired.",
             )
+            if changed:
+                updated_count += 1
+            continue
         # ------------------------------------------
         # ACTIVE PERIOD EXPIRY
         # ------------------------------------------
-        elif (
+        if (
             subscription.status
             == OrganisationSubscription.Status.ACTIVE
             and subscription.current_period_ends_at
             and subscription.current_period_ends_at <= now
         ):
-            new_status = (
-                OrganisationSubscription.Status.PAST_DUE
-            )
-        # ------------------------------------------
-        # SAVE CHANGE
-        # ------------------------------------------
-        if new_status != subscription.status:
-            if (
-                subscription.status
-                == OrganisationSubscription.Status.TRIAL
-            ):
-                reason = "Trial period expired."
-            elif (
-                subscription.status
-                == OrganisationSubscription.Status.ACTIVE
-            ):
-                reason = (
-                    "Subscription billing period expired."
-                )
-            else:
-                reason = (
-                    "Subscription status updated "
-                    "automatically."
-                )
-            changed = change_subscription_status(
+            changed = mark_subscription_past_due(
                 subscription,
-                new_status,
-                reason=reason,
+                reason=(
+                    "Subscription billing period expired."
+                ),
             )
             if changed:
                 updated_count += 1
@@ -284,6 +293,13 @@ def change_subscription_plan(
     previous_plan = subscription.plan
     if previous_plan == new_plan:
         return False
+    adapter = get_billing_adapter(
+            subscription
+        )
+    adapter.change_plan(
+        subscription,
+        new_plan,
+    )
     subscription.plan = new_plan
     subscription.save(
         update_fields=[
@@ -305,3 +321,215 @@ def change_subscription_plan(
         changed_by=changed_by,
     )
     return True
+def activate_subscription(
+    subscription,
+    *,
+    reason="Subscription activated.",
+    changed_by=None,
+):
+    subscription.cancelled_at = None
+    subscription.save(
+        update_fields=[
+            "cancelled_at",
+            "updated_at",
+        ]
+    )
+    return change_subscription_status(
+        subscription,
+        OrganisationSubscription.Status.ACTIVE,
+        reason=reason,
+        changed_by=changed_by,
+    )
+def cancel_subscription(
+    subscription,
+    *,
+    reason="Subscription cancelled.",
+    changed_by=None,
+):
+    adapter = get_billing_adapter(
+        subscription
+    )
+    adapter.cancel_subscription(
+        subscription
+    )
+    subscription.cancelled_at = (
+        timezone.now()
+    )
+    subscription.current_period_ends_at = (
+        None
+    )
+    subscription.save(
+        update_fields=[
+            "cancelled_at",
+            "current_period_ends_at",
+            "updated_at",
+        ]
+    )
+    return change_subscription_status(
+        subscription,
+        OrganisationSubscription
+        .Status
+        .CANCELLED,
+        reason=reason,
+        changed_by=changed_by,
+    )
+def reactivate_subscription(
+    subscription,
+    *,
+    reason="Subscription reactivated.",
+    changed_by=None,
+):
+    adapter = get_billing_adapter(
+        subscription
+    )
+    adapter.reactivate_subscription(
+        subscription
+    )
+    subscription.cancelled_at = None
+    subscription.save(
+        update_fields=[
+            "cancelled_at",
+            "updated_at",
+        ]
+    )
+    return change_subscription_status(
+        subscription,
+        OrganisationSubscription
+        .Status
+        .ACTIVE,
+        reason=reason,
+        changed_by=changed_by,
+    )
+def get_subscription_by_provider_subscription_id(
+    provider,
+    provider_subscription_id,
+):
+    return (
+        OrganisationSubscription.objects
+        .select_related("organisation")
+        .filter(
+            billing_provider=provider,
+            provider_subscription_id=(
+                provider_subscription_id
+            ),
+        )
+        .first()
+    )
+def get_subscription_by_provider_customer_id(
+    provider,
+    provider_customer_id,
+):
+    return (
+        OrganisationSubscription.objects
+        .select_related("organisation")
+        .filter(
+            billing_provider=provider,
+            provider_customer_id=(
+                provider_customer_id
+            ),
+        )
+        .first()
+    )
+def log_billing_event(
+    subscription,
+    event_type,
+    *,
+    amount=None,
+    currency="GBP",
+    provider_event_id="",
+    provider_reference="",
+    description="",
+    metadata=None,
+):
+    return OrganisationBillingEvent.objects.create(
+        organisation=subscription.organisation,
+        subscription=subscription,
+        event_type=event_type,
+        amount=amount,
+        currency=currency,
+        provider=subscription.billing_provider,
+        provider_event_id=provider_event_id,
+        provider_reference=provider_reference,
+        description=description,
+        metadata=metadata or {},
+    )
+def create_billing_session(
+    subscription,
+    requested_plan,
+):
+    OrganisationBillingSession.objects.filter(
+        subscription=subscription,
+        status=OrganisationBillingSession.Status.PENDING,
+    ).update(
+        status=OrganisationBillingSession.Status.CANCELLED,
+    )
+    config = (
+        OrganisationSubscription.PLAN_CONFIG[
+            requested_plan
+        ]
+    )
+    amount = config["monthly_price"]
+    session = (
+        OrganisationBillingSession.objects.create(
+            organisation=subscription.organisation,
+            subscription=subscription,
+            requested_plan=requested_plan,
+            amount=amount,
+            currency="GBP",
+            provider=subscription.billing_provider,
+            status=(
+                OrganisationBillingSession
+                .Status
+                .PENDING
+            ),
+        )
+    )
+    adapter = get_billing_adapter(
+        subscription
+    )
+    provider_session = (
+        adapter.create_checkout_session(
+            session
+        )
+    )
+    session.provider_session_id = (
+        provider_session.get(
+            "session_id",
+            "",
+        )
+    )
+    session.provider_checkout_url = (
+        provider_session.get(
+            "checkout_url",
+            "",
+        )
+    )
+    session.provider_reference = (
+        provider_session.get(
+            "reference",
+            "",
+        )
+    )
+    session.save(
+        update_fields=[
+            "provider_session_id",
+            "provider_checkout_url",
+            "provider_reference",
+            "updated_at",
+        ]
+    )
+    log_billing_event(
+        subscription,
+        OrganisationBillingEvent
+        .EventType
+        .CHECKOUT_CREATED,
+        amount=amount,
+        description=(
+            "Billing checkout session created."
+        ),
+        metadata={
+            "billing_session_id": session.pk,
+            "requested_plan": requested_plan,
+        },
+    )
+    return session

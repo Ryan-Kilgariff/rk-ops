@@ -273,4 +273,9 @@ urlpatterns = [
         views.organisation_subscription_change_plan_confirm,
         name="organisation_subscription_change_plan_confirm",
     ),
+    path(
+        "account/<slug:organisation_slug>/subscription/history/",
+        views.subscription_history,
+        name="subscription_history",
+    ),
 ]

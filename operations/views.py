@@ -67,8 +67,12 @@ from accounts.forms import (
     OrganisationInvitationForm,
 )
 from operations.services import (
+    cancel_subscription,
     change_subscription_plan,
     change_subscription_status,
+    reactivate_subscription,
+    change_subscription_plan,
+    create_billing_session,
 )
 from django.contrib import messages
 from django.utils import timezone
@@ -2106,7 +2110,10 @@ def organisation_account(
         )
         .order_by(
             "-created_at",
-        )[:10]
+        )[:5]
+    )
+    subscription_event_count = (
+        organisation.subscription_events.count()
     )
     pending_invitations = (
         OrganisationInvitation.objects
@@ -2267,6 +2274,7 @@ def organisation_account(
         "property_usage_width": property_usage_width,
         "member_usage_width": member_usage_width,
         "available_plans": available_plans,
+        "subscription_event_count": subscription_event_count,
     }
     return render(
         request,
@@ -2944,19 +2952,12 @@ def organisation_subscription_cancel(
             "operations:organisation_account",
             organisation_slug=organisation.slug,
         )
-    subscription.cancelled_at = timezone.now()
-    subscription.current_period_ends_at = None
-    subscription.save(
-        update_fields=[
-            "cancelled_at",
-            "current_period_ends_at",
-            "updated_at",
-        ]
-    )
-    change_subscription_status(
+    cancel_subscription(
         subscription,
-        OrganisationSubscription.Status.CANCELLED,
-        reason="Subscription cancelled by account administrator.",
+        reason=(
+            "Subscription cancelled "
+            "by account administrator."
+        ),
         changed_by=request.user,
     )
     messages.success(
@@ -2998,17 +2999,12 @@ def organisation_subscription_reactivate(
             "operations:organisation_account",
             organisation_slug=organisation.slug,
         )
-    subscription.cancelled_at = None
-    subscription.save(
-        update_fields=[
-            "cancelled_at",
-            "updated_at",
-        ]
-    )
-    change_subscription_status(
+    reactivate_subscription(
         subscription,
-        OrganisationSubscription.Status.ACTIVE,
-        reason="Subscription reactivated by account administrator.",
+        reason=(
+            "Subscription reactivated "
+            "by account administrator."
+        ),
         changed_by=request.user,
     )
     messages.success(
@@ -3174,21 +3170,45 @@ def organisation_subscription_change_plan(
     previous_plan = (
         subscription.get_plan_display()
     )
-    change_subscription_plan(
+    if (
+        subscription.billing_provider
+        == OrganisationSubscription.BillingProvider.MANUAL
+    ):
+        change_subscription_plan(
+            subscription,
+            new_plan,
+            reason=(
+                "Subscription plan changed "
+                "by account administrator."
+            ),
+            changed_by=request.user,
+        )
+        messages.success(
+            request,
+            (
+                f"Subscription changed from "
+                f"{previous_plan} to "
+                f"{subscription.get_plan_display()}."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    billing_session = create_billing_session(
         subscription,
         new_plan,
-        reason=(
-            "Subscription plan changed "
-            "by account administrator."
-        ),
-        changed_by=request.user,
     )
-    messages.success(
+    if billing_session.provider_checkout_url:
+        return redirect(
+            billing_session.provider_checkout_url
+        )
+    messages.info(
         request,
         (
-            f"Subscription changed from "
-            f"{previous_plan} to "
-            f"{subscription.get_plan_display()}."
+            "A billing session has been created. "
+            "The plan will change after payment "
+            "has been confirmed."
         ),
     )
     return redirect(
@@ -3285,6 +3305,21 @@ def organisation_subscription_change_plan_confirm(
             f"currently has {allocated_member_count} "
             "allocated places."
         )
+    if subscription.status in {
+        OrganisationSubscription.Status.CANCELLED,
+        OrganisationSubscription.Status.SUSPENDED,
+    }:
+        messages.warning(
+            request,
+            (
+                "Reactivate the subscription before "
+                "changing plans."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
     return render(
         request,
         "operations/subscription_change_plan_confirm.html",
@@ -3300,6 +3335,35 @@ def organisation_subscription_change_plan_confirm(
             "allocated_member_count": allocated_member_count,
             "can_change_plan": can_change_plan,
             "blocking_reason": blocking_reason,
+            "active_page": "account",
+        },
+    )
+@login_required
+def subscription_history(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    events = (
+        organisation.subscription_events
+        .select_related(
+            "changed_by",
+        )
+        .order_by(
+            "-created_at",
+        )
+    )
+    return render(
+        request,
+        "operations/subscription_history.html",
+        {
+            "organisation": organisation,
+            "subscription_events": events,
             "active_page": "account",
         },
     )

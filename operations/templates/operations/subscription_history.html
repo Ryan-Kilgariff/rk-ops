@@ -1,0 +1,94 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Subscription History
+{% endblock %}
+{% block topbar_title %}
+Subscription History
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Subscription
+</p>
+<h1 class="page-title">
+    Subscription History
+</h1>
+<p class="page-subtitle">
+    {{ organisation.name }}
+</p>
+<section class="section">
+    <div class="subscription-history-list">
+        {% for event in subscription_events %}
+            <div class="subscription-history-item">
+                <div class="subscription-history-change">
+                    {% if event.event_type == "plan_change" %}
+                        {{ event.get_previous_plan_display }}
+                        →
+                        {{ event.get_new_plan_display }}
+                    {% else %}
+                        {{ event.get_previous_status_display }}
+                        →
+                        {{ event.get_new_status_display }}
+                    {% endif %}
+                </div>
+                {% if event.reason %}
+                    <div class="task-meta">
+                        {{ event.reason }}
+                    </div>
+                {% endif %}
+                <div class="task-meta">
+                    {{ event.created_at|date:"d M Y · H:i" }}
+                    {% if event.changed_by %}
+                        ·
+                        {% if event.changed_by.get_full_name %}
+                            {{ event.changed_by.get_full_name }}
+                        {% else %}
+                            {{ event.changed_by.username }}
+                        {% endif %}
+                    {% else %}
+                        · Automated
+                    {% endif %}
+                </div>
+            </div>
+        {% empty %}
+            <div class="subscription-history-item">
+                No subscription history yet.
+            </div>
+        {% endfor %}
+    </div>
+    <div class="subscription-history-actions">
+        <a
+            href="{% url 'operations:organisation_account' organisation.slug %}"
+            class="button secondary-action"
+        >
+            ← Back to Account
+        </a>
+    </div>
+</section>
+{% endblock %}
+{% block extra_css %}
+<style>
+.subscription-history-list {
+    overflow: hidden;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+}
+.subscription-history-item {
+    padding: 18px 20px;
+    border-top: 1px solid #f3f4f6;
+}
+.subscription-history-item:first-child {
+    border-top: 0;
+}
+.subscription-history-change {
+    margin-bottom: 3px;
+    font-size: 15px;
+    font-weight: 700;
+}
+.subscription-history-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 18px;
+}
+</style>
+{% endblock %}

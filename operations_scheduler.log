@@ -119,3 +119,46 @@ Escalations updated: 0.
 Subscriptions updated: 0.
 Recurring tasks: 0 created, 1 skipped.
 Escalations updated: 0.
+Subscriptions updated: 0.
+Recurring tasks: 0 created, 1 skipped.
+Escalations updated: 0.
+Subscriptions updated: 0.
+Recurring tasks: 0 created, 1 skipped.
+Escalations updated: 0.
+Subscriptions updated: 0.
+Recurring tasks: 0 created, 1 skipped.
+Escalations updated: 1.
+Subscriptions updated: 0.
+Recurring tasks: 0 created, 1 skipped.
+Escalations updated: 0.
+Traceback (most recent call last):
+  File "C:\Users\kilga\rk-ops\manage.py", line 22, in <module>
+    main()
+    ~~~~^^
+  File "C:\Users\kilga\rk-ops\manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\kilga\rk-ops\.venv\Lib\site-packages\django\core\management\__init__.py", line 443, in execute_from_command_line
+    utility.execute()
+    ~~~~~~~~~~~~~~~^^
+  File "C:\Users\kilga\rk-ops\.venv\Lib\site-packages\django\core\management\__init__.py", line 437, in execute
+    self.fetch_command(subcommand).run_from_argv(self.argv)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\kilga\rk-ops\.venv\Lib\site-packages\django\core\management\base.py", line 422, in run_from_argv
+    self.execute(*args, **cmd_options)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kilga\rk-ops\.venv\Lib\site-packages\django\core\management\base.py", line 466, in execute
+    output = self.handle(*args, **options)
+  File "C:\Users\kilga\rk-ops\operations\management\commands\process_operations.py", line 24, in handle
+    update_subscription_statuses()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\kilga\rk-ops\operations\services.py", line 228, in update_subscription_statuses
+    if new_status != subscription.status:
+       ^^^^^^^^^^
+NameError: name 'new_status' is not defined
+Subscriptions updated: 0.
+Recurring tasks: 0 created, 1 skipped.
+Escalations updated: 0.
+Subscriptions updated: 0.
+Recurring tasks: 0 created, 1 skipped.
+Escalations updated: 0.

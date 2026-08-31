@@ -480,107 +480,121 @@ Account
         </div>
     </div>
 {% endif %}
-{% if subscription %}
-    {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
-        <div class="plan-selector-card">
-            <div class="plan-selector-header">
-                <h3>
-                    Available Plans
-                </h3>
-                <div class="task-meta">
-                    Choose the RK Ops plan that fits
-                    your organisation.
-                </div>
+{% if subscription.status == "cancelled" or subscription.status == "suspended" %}
+    <div class="subscription-alert subscription-alert-warning">
+        <div>
+            <strong>
+                Plan changes are currently unavailable
+            </strong>
+            <div class="task-meta">
+                Reactivate your RK Ops subscription
+                before changing plans.
             </div>
-            <div class="plan-options">
-                {% for plan in available_plans %}
-                    <div
-                        class="
-                            plan-option
-                            {% if plan.is_current %}
-                                plan-option-current
-                            {% endif %}
-                        "
-                    >
-                        <div class="plan-option-main">
-                            <div class="plan-option-heading">
-                                <div>
-                                    <div class="plan-option-name">
-                                        {{ plan.label }}
-                                    </div>
-                                    <div class="plan-price">
-                                        £{{ plan.monthly_price }}
-                                        <span>/ month</span>
-                                    </div>
-                                </div>
-                                {% if plan.is_current %}
-                                    <span class="current-plan-label">
-                                        Current Plan
-                                    </span>
-                                {% endif %}
-                            </div>
-                            <div class="task-meta">
-                                {{ plan.property_limit }}
-                                propert{{ plan.property_limit|pluralize:"y,ies" }}
-                                ·
-                                {{ plan.member_limit }}
-                                team member{{ plan.member_limit|pluralize }}
-                            </div>
-                            <div class="plan-feature-list">
-                                {% for feature in plan.features %}
-                                    <div class="plan-feature">
-                                        ✓ {{ feature }}
-                                    </div>
-                                {% endfor %}
-                            </div>
-                            {% if subscription.billing_provider %}
-                                <div class="task-meta plan-billing">
-                                    Billing:
-                                    {{ subscription.get_billing_provider_display }}
-                                </div>
-                            {% endif %}
-                        </div>
-                        {% if not plan.is_current %}
-                            <a
-                                href="{% url 'operations:organisation_subscription_change_plan_confirm' organisation.slug plan.value %}"
-                                class="button secondary-action"
-                            >
-                                Select {{ plan.label }}
-                            </a>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endif %}
+        </div>
+    </div>
+{% else %}
     {% if subscription %}
         {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
-            <div class="subscription-actions">
-                {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
-                    <form
-                        method="post"
-                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
-                    >
-                        {% csrf_token %}
-                        <button
-                            type="submit"
-                            class="button"
+            <div class="plan-selector-card">
+                <div class="plan-selector-header">
+                    <h3>
+                        Available Plans
+                    </h3>
+                    <div class="task-meta">
+                        Choose the RK Ops plan that fits
+                        your organisation.
+                    </div>
+                </div>
+                <div class="plan-options">
+                    {% for plan in available_plans %}
+                        <div
+                            class="
+                                plan-option
+                                {% if plan.is_current %}
+                                    plan-option-current
+                                {% endif %}
+                            "
                         >
-                            Reactivate Subscription
-                        </button>
-                    </form>
-                {% else %}
-                    <a
-                        href="{% url 'operations:organisation_subscription_cancel_confirm' organisation.slug %}"
-                        class="button danger-action"
-                    >
-                        Cancel Subscription
-                    </a>
-                {% endif %}
-            </div>
+                            <div class="plan-option-main">
+                                <div class="plan-option-heading">
+                                    <div>
+                                        <div class="plan-option-name">
+                                            {{ plan.label }}
+                                        </div>
+                                        <div class="plan-price">
+                                            £{{ plan.monthly_price }}
+                                            <span>/ month</span>
+                                        </div>
+                                    </div>
+                                    {% if plan.is_current %}
+                                        <span class="current-plan-label">
+                                            Current Plan
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="task-meta">
+                                    {{ plan.property_limit }}
+                                    propert{{ plan.property_limit|pluralize:"y,ies" }}
+                                    ·
+                                    {{ plan.member_limit }}
+                                    team member{{ plan.member_limit|pluralize }}
+                                </div>
+                                <div class="plan-feature-list">
+                                    {% for feature in plan.features %}
+                                        <div class="plan-feature">
+                                            ✓ {{ feature }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                {% if subscription.billing_provider %}
+                                    <div class="task-meta plan-billing">
+                                        Billing:
+                                        {{ subscription.get_billing_provider_display }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            {% if not plan.is_current %}
+                                <a
+                                    href="{% url 'operations:organisation_subscription_change_plan_confirm' organisation.slug plan.value %}"
+                                    class="button secondary-action"
+                                >
+                                    Select {{ plan.label }}
+                                </a>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
         {% endif %}
     {% endif %}
-</section>
+        {% if subscription %}
+            {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+                <div class="subscription-actions">
+                    {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
+                        <form
+                            method="post"
+                            action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
+                        >
+                            {% csrf_token %}
+                            <button
+                                type="submit"
+                                class="button"
+                            >
+                                Reactivate Subscription
+                            </button>
+                        </form>
+                    {% else %}
+                        <a
+                            href="{% url 'operations:organisation_subscription_cancel_confirm' organisation.slug %}"
+                            class="button danger-action"
+                        >
+                            Cancel Subscription
+                        </a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        {% endif %}
+    </section>
 {% if subscription_events %}
 <section class="section">
     <div class="section-header">
@@ -632,6 +646,16 @@ Account
             </div>
         {% endfor %}
     </div>
+    {% if subscription_event_count > 5 %}
+        <div class="history-footer">
+            <a
+                href="{% url 'operations:subscription_history' organisation.slug %}"
+                class="button secondary-action"
+            >
+                View Full History
+            </a>
+        </div>
+    {% endif %}
 </section>
 {% endif %}
 {% endblock %}
@@ -656,6 +680,12 @@ Account
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+.history-footer {
+    display: flex;
+    justify-content: flex-end;
+
+    margin-top: 14px;
 }
 .account-stat-value {
     margin-top: 8px;
