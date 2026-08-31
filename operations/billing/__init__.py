@@ -4,6 +4,9 @@ from properties.models import (
 from .manual import (
     ManualBillingAdapter,
 )
+from .paypal import (
+    PayPalBillingAdapter,
+)
 def get_billing_adapter(
     subscription,
 ):
@@ -17,6 +20,13 @@ def get_billing_adapter(
         .MANUAL
     ):
         return ManualBillingAdapter()
+    if (
+        provider
+        == OrganisationSubscription
+        .BillingProvider
+        .PAYPAL
+    ):
+        return PayPalBillingAdapter()
     raise ValueError(
         (
             "Unsupported billing provider: "
