@@ -12,6 +12,11 @@ from properties.models import (
 from operations.billing import (
     get_billing_adapter,
 )
+from decimal import Decimal, InvalidOperation
+from django.db import (
+    IntegrityError,
+    transaction,
+)
 def generate_recurring_tasks_for_date(
     target_date,
     property_obj=None,
@@ -537,3 +542,396 @@ def create_billing_session(
         },
     )
     return session
+def process_paypal_webhook_event(
+    event,
+):
+    event_id = event.get("id", "")
+    event_type = event.get("event_type", "")
+    resource = event.get("resource", {})
+    if not event_id or not event_type:
+        return False
+    # Prevent PayPal retries from creating
+    # duplicate RK Ops billing events.
+    if OrganisationBillingEvent.objects.filter(
+        provider=(
+            OrganisationSubscription
+            .BillingProvider
+            .PAYPAL
+        ),
+        provider_event_id=event_id,
+    ).exists():
+        return False
+    paypal_subscription_id = ""
+    if event_type.startswith(
+        "BILLING.SUBSCRIPTION."
+    ):
+        paypal_subscription_id = (
+            resource.get("id", "")
+        )
+    elif event_type.startswith(
+        "PAYMENT.SALE."
+    ):
+        paypal_subscription_id = (
+            resource.get(
+                "billing_agreement_id",
+                "",
+            )
+        )
+    if not paypal_subscription_id:
+        return False
+    billing_session = (
+        OrganisationBillingSession.objects
+        .filter(
+            provider=(
+                OrganisationSubscription
+                .BillingProvider
+                .PAYPAL
+            ),
+            provider_session_id=(
+                paypal_subscription_id
+            ),
+        )
+        .select_related(
+            "subscription",
+            "organisation",
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    subscription = None
+    if billing_session:
+        subscription = (
+            billing_session.subscription
+        )
+    if subscription is None:
+        subscription = (
+            OrganisationSubscription.objects
+            .filter(
+                billing_provider=(
+                    OrganisationSubscription
+                    .BillingProvider
+                    .PAYPAL
+                ),
+                provider_subscription_id=(
+                    paypal_subscription_id
+                ),
+            )
+            .select_related(
+                "organisation"
+            )
+            .first()
+        )
+    if subscription is None:
+        return False
+    with transaction.atomic():
+        # --------------------------------------------------
+        # SUBSCRIPTION CREATED
+        # --------------------------------------------------
+        if (
+            event_type
+            == "BILLING.SUBSCRIPTION.CREATED"
+        ):
+            if (
+                subscription.provider_subscription_id
+                != paypal_subscription_id
+            ):
+                subscription.provider_subscription_id = (
+                    paypal_subscription_id
+                )
+                subscription.save(
+                    update_fields=[
+                        "provider_subscription_id",
+                        "updated_at",
+                    ]
+                )
+            log_billing_event(
+                subscription,
+                (
+                    OrganisationBillingEvent
+                    .EventType
+                    .PROVIDER_EVENT
+                ),
+                provider_event_id=event_id,
+                provider_reference=(
+                    paypal_subscription_id
+                ),
+                description=(
+                    "PayPal subscription created."
+                ),
+                metadata=event,
+            )
+            return True
+        # --------------------------------------------------
+        # SUBSCRIPTION ACTIVATED
+        # --------------------------------------------------
+        if (
+            event_type
+            == "BILLING.SUBSCRIPTION.ACTIVATED"
+        ):
+            if (
+                subscription.provider_subscription_id
+                != paypal_subscription_id
+            ):
+                subscription.provider_subscription_id = (
+                    paypal_subscription_id
+                )
+                subscription.save(
+                    update_fields=[
+                        "provider_subscription_id",
+                        "updated_at",
+                    ]
+                )
+            if (
+                billing_session
+                and billing_session.status
+                == (
+                    OrganisationBillingSession
+                    .Status
+                    .PENDING
+                )
+            ):
+                change_subscription_plan(
+                    subscription,
+                    billing_session.requested_plan,
+                    reason=(
+                        "Plan confirmed by "
+                        "PayPal webhook."
+                    ),
+                    sync_provider=False,
+                )
+                billing_session.status = (
+                    OrganisationBillingSession
+                    .Status
+                    .COMPLETED
+                )
+                billing_session.completed_at = (
+                    timezone.now()
+                )
+                billing_session.save(
+                    update_fields=[
+                        "status",
+                        "completed_at",
+                        "updated_at",
+                    ]
+                )
+            change_subscription_status(
+                subscription,
+                (
+                    OrganisationSubscription
+                    .Status
+                    .ACTIVE
+                ),
+                reason=(
+                    "PayPal confirmed subscription "
+                    "activation."
+                ),
+            )
+            log_billing_event(
+                subscription,
+                (
+                    OrganisationBillingEvent
+                    .EventType
+                    .PROVIDER_EVENT
+                ),
+                provider_event_id=event_id,
+                provider_reference=(
+                    paypal_subscription_id
+                ),
+                description=(
+                    "PayPal subscription activated."
+                ),
+                metadata=event,
+            )
+            return True
+        # --------------------------------------------------
+        # PAYMENT COMPLETED
+        # --------------------------------------------------
+        if (
+            event_type
+            == "PAYMENT.SALE.COMPLETED"
+        ):
+            amount = None
+            amount_data = resource.get(
+                "amount",
+                {},
+            )
+            amount_value = amount_data.get(
+                "total"
+            )
+            if amount_value is not None:
+                try:
+                    amount = Decimal(
+                        str(amount_value)
+                    )
+                except (
+                    InvalidOperation,
+                    TypeError,
+                    ValueError,
+                ):
+                    amount = None
+            log_billing_event(
+                subscription,
+                (
+                    OrganisationBillingEvent
+                    .EventType
+                    .PAYMENT_SUCCEEDED
+                ),
+                amount=amount,
+                currency=(
+                    amount_data.get(
+                        "currency",
+                        "GBP",
+                    )
+                ),
+                provider_event_id=event_id,
+                provider_reference=(
+                    resource.get("id", "")
+                ),
+                description=(
+                    "PayPal payment completed."
+                ),
+                metadata=event,
+            )
+            return True
+        # --------------------------------------------------
+        # PAYMENT FAILED
+        # --------------------------------------------------
+        if (
+            event_type
+            == (
+                "BILLING.SUBSCRIPTION."
+                "PAYMENT.FAILED"
+            )
+        ):
+            change_subscription_status(
+                subscription,
+                (
+                    OrganisationSubscription
+                    .Status
+                    .PAST_DUE
+                ),
+                reason=(
+                    "PayPal reported a "
+                    "subscription payment failure."
+                ),
+            )
+            log_billing_event(
+                subscription,
+                (
+                    OrganisationBillingEvent
+                    .EventType
+                    .PAYMENT_FAILED
+                ),
+                provider_event_id=event_id,
+                provider_reference=(
+                    paypal_subscription_id
+                ),
+                description=(
+                    "PayPal subscription "
+                    "payment failed."
+                ),
+                metadata=event,
+            )
+            return True
+        # --------------------------------------------------
+        # SUSPENDED
+        # --------------------------------------------------
+        if (
+            event_type
+            == "BILLING.SUBSCRIPTION.SUSPENDED"
+        ):
+            change_subscription_status(
+                subscription,
+                (
+                    OrganisationSubscription
+                    .Status
+                    .SUSPENDED
+                ),
+                reason=(
+                    "PayPal suspended "
+                    "the subscription."
+                ),
+            )
+            log_billing_event(
+                subscription,
+                (
+                    OrganisationBillingEvent
+                    .EventType
+                    .PROVIDER_EVENT
+                ),
+                provider_event_id=event_id,
+                provider_reference=(
+                    paypal_subscription_id
+                ),
+                description=(
+                    "PayPal subscription suspended."
+                ),
+                metadata=event,
+            )
+            return True
+        # --------------------------------------------------
+        # CANCELLED / EXPIRED
+        # --------------------------------------------------
+        if event_type in {
+            "BILLING.SUBSCRIPTION.CANCELLED",
+            "BILLING.SUBSCRIPTION.EXPIRED",
+        }:
+            change_subscription_status(
+                subscription,
+                (
+                    OrganisationSubscription
+                    .Status
+                    .CANCELLED
+                ),
+                reason=(
+                    "PayPal subscription "
+                    f"event: {event_type}."
+                ),
+            )
+            if not subscription.cancelled_at:
+                subscription.cancelled_at = (
+                    timezone.now()
+                )
+                subscription.save(
+                    update_fields=[
+                        "cancelled_at",
+                        "updated_at",
+                    ]
+                )
+            log_billing_event(
+                subscription,
+                (
+                    OrganisationBillingEvent
+                    .EventType
+                    .PROVIDER_EVENT
+                ),
+                provider_event_id=event_id,
+                provider_reference=(
+                    paypal_subscription_id
+                ),
+                description=(
+                    f"PayPal event: {event_type}."
+                ),
+                metadata=event,
+            )
+            return True
+        # --------------------------------------------------
+        # OTHER PAYPAL EVENTS
+        # --------------------------------------------------
+        log_billing_event(
+            subscription,
+            (
+                OrganisationBillingEvent
+                .EventType
+                .PROVIDER_EVENT
+            ),
+            provider_event_id=event_id,
+            provider_reference=(
+                paypal_subscription_id
+            ),
+            description=(
+                f"PayPal event: {event_type}."
+            ),
+            metadata=event,
+        )
+        return True

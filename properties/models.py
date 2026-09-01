@@ -356,6 +356,21 @@ class OrganisationBillingEvent(models.Model):
         ordering = [
             "-created_at",
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "provider",
+                    "provider_event_id",
+                ],
+                condition=~models.Q(
+                    provider_event_id=""
+                ),
+                name=(
+                    "unique_billing_"
+                    "provider_event"
+                ),
+            ),
+        ]
     def __str__(self):
         return (
             f"{self.organisation.name}: "

@@ -79,6 +79,7 @@ from operations.services import (
     change_subscription_plan,
     create_billing_session,
     log_billing_event,
+    process_paypal_webhook_event,
 )
 from operations.billing.paypal import (
     PayPalBillingAdapter,
@@ -3455,24 +3456,6 @@ def paypal_billing_return(
                 "updated_at",
             ]
         )
-        log_billing_event(
-            subscription,
-            OrganisationBillingEvent
-            .EventType
-            .PAYMENT_SUCCEEDED,
-            amount=billing_session.amount,
-            provider_reference=(
-                billing_session.provider_reference
-            ),
-            description=(
-                "PayPal subscription activated."
-            ),
-            metadata={
-                "paypal_subscription_id": (
-                    billing_session.provider_session_id
-                ),
-            },
-        )
         messages.success(
             request,
             (
@@ -3578,13 +3561,36 @@ def paypal_webhook(request):
         "resource",
         {},
     )
+    try:
+        processed = (
+            process_paypal_webhook_event(
+                event
+            )
+        )
+    except Exception as exc:
+        print(
+            "PAYPAL WEBHOOK "
+            "PROCESSING ERROR:",
+            exc,
+        )
+        return JsonResponse(
+            {
+                "detail": (
+                    "Webhook processing failed."
+                )
+            },
+            status=500,
+        )
     print(
         "PAYPAL WEBHOOK:",
         event_type,
         event_id,
+        "processed=",
+        processed,
     )
     return JsonResponse(
         {
             "received": True,
+            "processed": processed,
         }
     )
