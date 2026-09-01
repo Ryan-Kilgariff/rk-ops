@@ -32,6 +32,7 @@ class OrganisationSubscription(models.Model):
         GROWTH = "growth", "Growth"
         PRO = "pro", "Pro"
     class Status(models.TextChoices):
+        PENDING = "pending", "Pending setup"
         TRIAL = "trial", "Trial"
         ACTIVE = "active", "Active"
         PAST_DUE = "past_due", "Past Due"

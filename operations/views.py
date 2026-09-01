@@ -9,6 +9,7 @@ import json
 from django.utils.text import slugify
 from properties.forms import PropertyForm
 from .notifications import create_notification
+from django.utils.text import slugify
 from .services import (
     generate_recurring_tasks_for_date,
     update_task_escalations,
@@ -70,6 +71,7 @@ from django.contrib.auth import get_user_model
 from accounts.forms import (
     InvitationSignupForm,
     OrganisationInvitationForm,
+    SignUpForm,
 )
 from operations.services import (
     cancel_subscription,
@@ -80,6 +82,7 @@ from operations.services import (
     create_billing_session,
     log_billing_event,
     process_paypal_webhook_event,
+    get_organisation_onboarding_progress,
 )
 from operations.billing.paypal import (
     PayPalBillingAdapter,
@@ -715,8 +718,8 @@ def property_home(request):
             return redirect(
                 "operations:account_home"
             )
-        raise PermissionDenied(
-            "You do not currently have access to RK Ops."
+        return redirect(
+            "operations:organisation_create"
         )
     return redirect(
         "operations:dashboard",
@@ -2113,11 +2116,49 @@ def organisation_account(
             organisation_slug,
         )
     )
+    onboarding_progress = (
+        get_organisation_onboarding_progress(
+            organisation
+        )
+    )
     subscription = getattr(
         organisation,
         "subscription",
         None,
     )
+    trial_days_remaining = None
+    if (
+        subscription
+        and subscription.status
+        == OrganisationSubscription.Status.TRIAL
+        and subscription.trial_ends_at
+    ):
+        remaining = (
+            subscription.trial_ends_at
+            - timezone.now()
+        )
+        trial_days_remaining = max(
+            0,
+            remaining.days + 1,
+        )
+    trial_monthly_price = None
+    if (
+        subscription
+        and subscription.status
+        == OrganisationSubscription.Status.TRIAL
+    ):
+        plan_config = (
+            OrganisationSubscription
+            .PLAN_CONFIG.get(
+                subscription.plan,
+                {}
+            )
+        )
+        trial_monthly_price = (
+            plan_config.get(
+                "monthly_price"
+            )
+        )
     latest_billing_session = None
     latest_billing_event = None
     latest_provider_event = None
@@ -2328,6 +2369,11 @@ def organisation_account(
         "latest_provider_event": (
             latest_provider_event
         ),
+        "onboarding_progress": onboarding_progress,
+        "trial_days_remaining": (
+            trial_days_remaining
+        ),
+        "trial_monthly_price": trial_monthly_price,
     }
     return render(
         request,
@@ -2966,6 +3012,10 @@ def account_home(request):
             .select_related("subscription")
             .order_by("name")
         )
+        if not organisations.exists():
+            return redirect(
+                "operations:organisation_create"
+            )
     return render(
         request,
         "operations/account_home.html",
@@ -3643,17 +3693,41 @@ def paypal_billing_return(
         # ------------------------------------------
         # ENSURE RK OPS IS ACTIVE
         # ------------------------------------------
-        change_subscription_status(
-            subscription,
-            OrganisationSubscription
-            .Status
-            .ACTIVE,
-            reason=(
-                "PayPal confirmed subscription "
-                "activation."
-            ),
-            changed_by=request.user,
+        is_trial_signup = bool(
+            billing_session.metadata.get(
+                "trial_signup"
+            )
         )
+        if is_trial_signup:
+            if not subscription.trial_ends_at:
+                subscription.trial_ends_at = (
+                    timezone.now()
+                    + timedelta(days=14)
+                )
+                subscription.save(
+                    update_fields=[
+                        "trial_ends_at",
+                        "updated_at",
+                    ]
+                )
+            change_subscription_status(
+                subscription,
+                OrganisationSubscription.Status.TRIAL,
+                reason=(
+                    "PayPal subscription approved "
+                    "and 14-day trial started."
+                ),
+                changed_by=request.user,
+            )
+        else:
+            change_subscription_status(
+                subscription,
+                OrganisationSubscription.Status.ACTIVE,
+                reason=(
+                    "PayPal subscription activated."
+                ),
+                changed_by=request.user,
+            )
         messages.success(
             request,
             (
@@ -3827,4 +3901,429 @@ def paypal_webhook(request):
             "received": True,
             "processed": processed,
         }
+    )
+@login_required
+def organisation_create(request):
+    existing_membership = (
+        OrganisationMembership.objects
+        .filter(
+            user=request.user,
+            is_active=True,
+        )
+        .exists()
+    )
+    if existing_membership:
+        return redirect(
+            "operations:account_home"
+        )
+    if request.method == "POST":
+        name = request.POST.get(
+            "name",
+            ""
+        ).strip()
+        if not name:
+            messages.error(
+                request,
+                "Enter an organisation name.",
+            )
+            return render(
+                request,
+                "operations/organisation_create.html",
+                {
+                    "active_page": "account",
+                },
+            )
+        base_slug = slugify(name)
+        slug = base_slug
+        counter = 2
+        while Organisation.objects.filter(
+            slug=slug
+        ).exists():
+            slug = (
+                f"{base_slug}-{counter}"
+            )
+            counter += 1
+        organisation = (
+            Organisation.objects.create(
+                name=name,
+                slug=slug,
+                owner=request.user,
+            )
+        )
+        OrganisationMembership.objects.create(
+            organisation=organisation,
+            user=request.user,
+            role=(
+                OrganisationMembership
+                .Role
+                .OWNER
+            ),
+            is_active=True,
+        )
+        messages.success(
+            request,
+            (
+                "Your RK Ops organisation "
+                "has been created."
+            ),
+        )
+        return redirect(
+            "operations:organisation_trial_choose_plan",
+            organisation_slug=organisation.slug,
+        )
+    return render(
+        request,
+        "operations/organisation_create.html",
+        {
+            "active_page": "account",
+        },
+    )
+def signup(request):
+    if request.user.is_authenticated:
+        return redirect(
+            "operations:property_home"
+        )
+    if request.method == "POST":
+        form = SignUpForm(
+            request.POST
+        )
+        if form.is_valid():
+            user = form.save()
+            login(
+                request,
+                user,
+            )
+            messages.success(
+                request,
+                (
+                    "Your RK Ops account "
+                    "has been created."
+                ),
+            )
+            return redirect(
+                "operations:organisation_create"
+            )
+    else:
+        form = SignUpForm()
+    return render(
+        request,
+        "operations/signup.html",
+        {
+            "form": form,
+        },
+    )
+@login_required
+def organisation_trial_choose_plan(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    existing_subscription = (
+        OrganisationSubscription.objects
+        .filter(
+            organisation=organisation
+        )
+        .first()
+    )
+    if (
+        existing_subscription
+        and existing_subscription.status
+        in {
+            OrganisationSubscription.Status.TRIAL,
+            OrganisationSubscription.Status.ACTIVE,
+            OrganisationSubscription.Status.PAST_DUE,
+        }
+    ):
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    if request.method == "POST":
+        selected_plan = request.POST.get(
+            "plan",
+            ""
+        )
+        valid_plans = {
+            plan_value
+            for plan_value, _ in (
+                OrganisationSubscription
+                .Plan
+                .choices
+            )
+            if (
+                OrganisationSubscription
+                .PLAN_CONFIG[
+                    plan_value
+                ]["public"]
+            )
+        }
+        if selected_plan not in valid_plans:
+            messages.error(
+                request,
+                "Select a valid RK Ops plan.",
+            )
+            return redirect(
+                "operations:organisation_trial_choose_plan",
+                organisation_slug=organisation.slug,
+            )
+        subscription, created = (
+            OrganisationSubscription.objects
+            .get_or_create(
+                organisation=organisation,
+                defaults={
+                    "plan": selected_plan,
+                    "status": (
+                        OrganisationSubscription
+                        .Status
+                        .PENDING
+                    ),
+                    "billing_provider": (
+                        OrganisationSubscription
+                        .BillingProvider
+                        .PAYPAL
+                    ),
+                },
+            )
+        )
+        if not created:
+            subscription.plan = selected_plan
+            subscription.status = (
+                OrganisationSubscription
+                .Status
+                .PENDING
+            )
+            subscription.billing_provider = (
+                OrganisationSubscription
+                .BillingProvider
+                .PAYPAL
+            )
+            subscription.trial_ends_at = None
+            subscription.save(
+                update_fields=[
+                    "plan",
+                    "status",
+                    "billing_provider",
+                    "trial_ends_at",
+                    "updated_at",
+                ]
+            )
+        try:
+            billing_session = (
+                create_billing_session(
+                    subscription,
+                    selected_plan,
+                    trial_signup=True,
+                )
+            )
+        except PayPalAPIError as exc:
+            logger.exception(
+                "PayPal trial checkout "
+                "could not be created."
+            )
+            messages.error(
+                request,
+                (
+                    "PayPal checkout could not "
+                    "be started. Please try again."
+                ),
+            )
+            return redirect(
+                "operations:organisation_trial_choose_plan",
+                organisation_slug=organisation.slug,
+            )
+        if billing_session.provider_checkout_url:
+            return redirect(
+                billing_session.provider_checkout_url
+            )
+        messages.error(
+            request,
+            "PayPal checkout could not be started.",
+        )
+        return redirect(
+            "operations:organisation_trial_choose_plan",
+            organisation_slug=organisation.slug,
+        )
+    public_plans = []
+    for plan_value, plan_label in (
+        OrganisationSubscription.Plan.choices
+    ):
+        config = (
+            OrganisationSubscription
+            .PLAN_CONFIG[
+                plan_value
+            ]
+        )
+        if not config["public"]:
+            continue
+        public_plans.append(
+            {
+                "value": plan_value,
+                "label": plan_label,
+                "price": config[
+                    "monthly_price"
+                ],
+                "property_limit": config[
+                    "property_limit"
+                ],
+                "member_limit": config[
+                    "member_limit"
+                ],
+                "features": config[
+                    "features"
+                ],
+            }
+        )
+        messages.error(
+            request,
+            (
+                "PayPal did not return "
+                "an approval link."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    return render(
+        request,
+        "operations/trial_choose_plan.html",
+        {
+            "organisation": organisation,
+            "public_plans": public_plans,
+            "active_page": "account",
+        },
+    )
+@login_required
+def organisation_trial_change_plan(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    subscription = (
+        OrganisationSubscription.objects
+        .filter(
+            organisation=organisation
+        )
+        .first()
+    )
+    if (
+        not subscription
+        or subscription.status
+        != OrganisationSubscription.Status.TRIAL
+    ):
+        messages.error(
+            request,
+            "This subscription is not currently on trial.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    if request.method != "POST":
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    new_plan = request.POST.get(
+        "plan",
+        ""
+    )
+    valid_plans = {
+        value
+        for value, _ in (
+            OrganisationSubscription.Plan.choices
+        )
+        if (
+            OrganisationSubscription
+            .PLAN_CONFIG[value]["public"]
+        )
+    }
+    if new_plan not in valid_plans:
+        messages.error(
+            request,
+            "Select a valid plan.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    if new_plan == subscription.plan:
+        messages.info(
+            request,
+            "This is already your current trial plan.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    adapter = PayPalBillingAdapter()
+    try:
+        result = adapter.revise_subscription_plan(
+            subscription,
+            new_plan,
+            trial_plan=True,
+        )
+    except PayPalAPIError:
+        logger.exception(
+            "PayPal trial plan change failed."
+        )
+        messages.error(
+            request,
+            (
+                "PayPal could not update your "
+                "trial plan. Please try again."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    approval_url = result.get(
+        "approval_url"
+    )
+    if approval_url:
+        metadata = (
+            subscription.billing_metadata
+            or {}
+        )
+        metadata[
+            "pending_trial_plan_change"
+        ] = {
+            "new_plan": new_plan,
+            "requested_at": (
+                timezone.now().isoformat()
+            ),
+        }
+        subscription.billing_metadata = (
+            metadata
+        )
+        subscription.save(
+            update_fields=[
+                "billing_metadata",
+                "updated_at",
+            ]
+        )
+        return redirect(
+            approval_url
+        )
+    messages.error(
+        request,
+        (
+            "PayPal did not return an "
+            "approval link."
+        ),
+    )
+    return redirect(
+        "operations:organisation_account",
+        organisation_slug=organisation.slug,
     )

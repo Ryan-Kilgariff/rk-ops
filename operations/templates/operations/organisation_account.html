@@ -15,6 +15,69 @@ Account
 <p class="page-subtitle">
     Manage your RK Ops organisation and properties.
 </p>
+{% if onboarding_progress and not onboarding_progress.complete %}
+<section class="account-section onboarding-card">
+    <div class="account-section-heading">
+        <div>
+            <p class="account-eyebrow">
+                GETTING STARTED
+            </p>
+            <h2>
+                Set up RK Ops
+            </h2>
+            <p>
+                Complete these steps to get your
+                organisation ready for day-to-day use.
+            </p>
+        </div>
+        <div class="onboarding-progress-summary">
+            {{ onboarding_progress.completed_count }}
+            of
+            {{ onboarding_progress.total_count }}
+            complete
+        </div>
+    </div>
+    <div class="onboarding-progress-track">
+        <div
+            class="onboarding-progress-fill"
+            style="width: {{ onboarding_progress.percentage }}%;"
+        ></div>
+    </div>
+    <div class="onboarding-steps">
+        {% for step in onboarding_progress.steps %}
+            <div
+                class="
+                    onboarding-step
+                    {% if step.complete %}
+                        is-complete
+                    {% endif %}
+                "
+            >
+                <div class="onboarding-step-status">
+                    {% if step.complete %}
+                        ✓
+                    {% else %}
+                        ○
+                    {% endif %}
+                </div>
+                <div class="onboarding-step-content">
+                    <strong>
+                        {{ step.label }}
+                    </strong>
+                </div>
+                {% if not step.complete and step.action_url %}
+                    <a
+                        href="{{ step.action_url }}"
+                        class="onboarding-step-action"
+                    >
+                        {{ step.action_label }}
+                    </a>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
 <section class="account-stats">
     <article class="account-stat-card">
         <div class="account-stat-label">
@@ -70,6 +133,88 @@ Account
         </div>
     </article>
 </section>
+{% if subscription and subscription.status == "trial" %}
+<div class="trial-banner">
+    <div class="trial-banner-main">
+        <div>
+            <p class="trial-banner-label">
+                {{ subscription.get_plan_display|upper }}
+                TRIAL
+            </p>
+            <h3>
+                {{ trial_days_remaining }}
+                day{{ trial_days_remaining|pluralize }}
+                remaining
+            </h3>
+            {% if subscription.trial_ends_at %}
+                <p>
+                    Your free trial ends on
+                    <strong>
+                        {{ subscription.trial_ends_at|date:"j F Y" }}
+                    </strong>.
+                </p>
+            {% endif %}
+            {% if trial_monthly_price %}
+                <p>
+                    After your trial, your
+                    {{ subscription.get_plan_display }}
+                    plan will continue at
+                    <strong>
+                        £{{ trial_monthly_price }}/month
+                    </strong>
+                    unless cancelled before the
+                    trial ends.
+                </p>
+            {% endif %}
+        </div>
+        <div class="trial-banner-actions">
+            <a
+                href="#subscription-plans"
+                class="button button-secondary"
+            >
+                Change plan
+            </a>
+            <form
+                method="post"
+                action="{% url 'operations:organisation_subscription_cancel' organisation.slug %}"
+            >
+                {% csrf_token %}
+                <button
+                    type="submit"
+                    class="button"
+                >
+                    Cancel trial
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if subscription and subscription.status == "pending" %}
+<div class="trial-banner">
+    <div class="trial-banner-main">
+        <div>
+            <p class="trial-banner-label">
+                SETUP INCOMPLETE
+            </p>
+            <h3>
+                Complete your subscription setup
+            </h3>
+            <p>
+                Choose your RK Ops plan and
+                complete PayPal setup to start
+                your 14-day free trial.
+            </p>
+        </div>
+        <a
+            href="{% url 'operations:organisation_trial_choose_plan' organisation.slug %}"
+            class="button"
+        >
+            Choose plan
+        </a>
+    </div>
+</div>
+{% endif %}
 <section class="section">
     <div class="section-header">
         <div>
@@ -306,7 +451,10 @@ Account
         </div>
     </section>
 {% endif %}
-<section class="section">
+<section 
+    class="section"
+    id="subscription-plans"
+    >
     <div class="section-header">
         <div>
             <h2 class="section-title">
@@ -554,12 +702,32 @@ Account
                                 {% endif %}
                             </div>
                             {% if not plan.is_current %}
-                                <a
-                                    href="{% url 'operations:organisation_subscription_change_plan_confirm' organisation.slug plan.value %}"
-                                    class="button secondary-action"
-                                >
-                                    Select {{ plan.label }}
-                                </a>
+                                {% if subscription.status == "trial" %}
+                                    <form
+                                        method="post"
+                                        action="{% url 'operations:organisation_trial_change_plan' organisation.slug %}"
+                                    >
+                                        {% csrf_token %}
+                                        <input
+                                            type="hidden"
+                                            name="plan"
+                                            value="{{ plan.value }}"
+                                        >
+                                        <button
+                                            type="submit"
+                                            class="button secondary-action"
+                                        >
+                                            Switch to {{ plan.label }}
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <a
+                                        href="{% url 'operations:organisation_subscription_change_plan_confirm' organisation.slug plan.value %}"
+                                        class="button secondary-action"
+                                    >
+                                        Select {{ plan.label }}
+                                    </a>
+                                {% endif %}
                             {% endif %}
                         </div>
                     {% endfor %}
@@ -1154,6 +1322,147 @@ a.account-list-item:hover {
 .billing-diagnostic-item strong {
     display: block;
     overflow-wrap: anywhere;
+}
+.onboarding-card {
+    margin-bottom: 2rem;
+}
+.onboarding-progress-summary {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #4b5563;
+}
+.onboarding-progress-track {
+    width: 100%;
+    height: 8px;
+    margin-top: 1rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e5e7eb;
+}
+.onboarding-progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: #111827;
+}
+.onboarding-steps {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+}
+.onboarding-step {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+}
+.onboarding-step-status {
+    display: flex;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #f3f4f6;
+    font-weight: 700;
+}
+.onboarding-step.is-complete {
+    opacity: 0.7;
+}
+.onboarding-step.is-complete
+.onboarding-step-status {
+    background: #dcfce7;
+}
+.onboarding-step-action {
+    margin-left: auto;
+    padding: 0.55rem 0.8rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: #111827;
+    color: #fff;
+}
+.subscription-trial-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+}
+.subscription-trial-summary p {
+    margin: 0.25rem 0 0;
+    color: #6b7280;
+}
+.trial-days {
+    font-weight: 700;
+    white-space: nowrap;
+}
+.subscription-trial-note {
+    margin-top: 0.75rem;
+    color: #4b5563;
+}
+.trial-banner {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding: 1.5rem 1.75rem;
+    border: 1px solid #dfe3e8;
+    border-radius: 16px;
+    background: #fff;
+    box-sizing: border-box;
+}
+.trial-banner-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2rem;
+}
+.trial-banner-main > div {
+    flex: 1;
+    min-width: 0;
+}
+.trial-banner-label {
+    margin: 0 0 0.35rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: #64748b;
+}
+.trial-banner h3 {
+    margin: 0;
+    font-size: 1.8rem;
+    line-height: 1.15;
+}
+.trial-banner-main p {
+    margin: 0.45rem 0 0;
+    color: #64748b;
+}
+.trial-banner .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+.trial-banner-note {
+    margin: 1.25rem 0 0;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+    color: #475569;
+}
+@media (max-width: 700px) {
+    .trial-banner-main {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .trial-banner .btn {
+        width: 100%;
+        text-align: center;
+    }
 }
 </style>
 {% endblock %}

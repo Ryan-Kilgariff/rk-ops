@@ -1,0 +1,38 @@
+{% extends "operations/base.html" %}
+{% block content %}
+<div class="account-page">
+    <section class="account-section">
+        <p class="account-eyebrow">
+            GETTING STARTED
+        </p>
+        <h1>
+            Create your organisation
+        </h1>
+        <p>
+            Set up your RK Ops workspace to
+            begin adding properties and your team.
+        </p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="id_name">
+                    Organisation name
+                </label>
+                <input
+                    type="text"
+                    id="id_name"
+                    name="name"
+                    required
+                    autocomplete="organization"
+                >
+            </div>
+            <button
+                type="submit"
+                class="btn btn-primary"
+            >
+                Create organisation
+            </button>
+        </form>
+    </section>
+</div>
+{% endblock %}

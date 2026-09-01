@@ -1,0 +1,63 @@
+{% extends "operations/base.html" %}
+{% block title %}
+Create your RK Ops account
+{% endblock %}
+{% block topbar_title %}
+Create account
+{% endblock %}
+{% block content %}
+<div class="signup-page">
+    <section class="signup-card">
+        <p class="page-eyebrow">
+            RK OPS
+        </p>
+        <h1 class="page-title">
+            Create your account
+        </h1>
+        <p class="page-subtitle">
+            Start setting up your hospitality
+            operations workspace.
+        </p>
+        <form method="post">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <div class="form-errors">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+            {% for field in form %}
+                <div class="form-group">
+                    <label
+                        for="{{ field.id_for_label }}"
+                    >
+                        {{ field.label }}
+                    </label>
+                    {{ field }}
+                    {% if field.help_text %}
+                        <div class="form-help">
+                            {{ field.help_text }}
+                        </div>
+                    {% endif %}
+                    {% for error in field.errors %}
+                        <div class="form-error">
+                            {{ error }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endfor %}
+            <button
+                type="submit"
+                class="button"
+            >
+                Create account
+            </button>
+        </form>
+        <p class="signup-login-link">
+            Already have an account?
+            <a href="{% url 'login' %}">
+                Log in
+            </a>
+        </p>
+    </section>
+</div>
+{% endblock %}

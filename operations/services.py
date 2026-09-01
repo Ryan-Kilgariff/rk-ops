@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from django.utils import timezone
 from .activity import log_activity
+from django.urls import reverse
 from .models import ActivityLog, RecurringTask, Task
 from .notifications import create_notification
 from properties.models import (
@@ -16,6 +17,17 @@ from decimal import Decimal, InvalidOperation
 from django.db import (
     IntegrityError,
     transaction,
+)
+from accounts.models import (
+    OrganisationInvitation,
+    OrganisationMembership,
+)
+from operations.models import (
+    Checklist,
+    Task,
+)
+from properties.models import (
+    OrganisationSubscription,
 )
 def generate_recurring_tasks_for_date(
     target_date,
@@ -501,6 +513,8 @@ def log_billing_event(
 def create_billing_session(
     subscription,
     requested_plan,
+    *,
+    trial_signup=False,
 ):
     existing_session = (
         OrganisationBillingSession.objects
@@ -543,6 +557,9 @@ def create_billing_session(
             amount=amount,
             currency="GBP",
             provider=subscription.billing_provider,
+            metadata={
+                "trial_signup": trial_signup,
+            },
             status=(
                 OrganisationBillingSession
                 .Status
@@ -727,49 +744,8 @@ def _process_paypal_webhook_event(event):
         # --------------------------------------------------
         # SUBSCRIPTION ACTIVATED
         # --------------------------------------------------
-        if (
-            event_type
-            == "BILLING.SUBSCRIPTION.ACTIVATED"
-        ):
-            if (
-                subscription.provider_subscription_id
-                != paypal_subscription_id
-            ):
-                subscription.provider_subscription_id = (
-                    paypal_subscription_id
-                )
-                subscription.save(
-                    update_fields=[
-                        "provider_subscription_id",
-                        "updated_at",
-                    ]
-                )
-            if subscription.cancelled_at:
-                subscription.cancelled_at = None
-                subscription.save(
-                    update_fields=[
-                        "cancelled_at",
-                        "updated_at",
-                    ]
-                )
-            if (
-                billing_session
-                and billing_session.status
-                == (
-                    OrganisationBillingSession
-                    .Status
-                    .PENDING
-                )
-            ):
-                change_subscription_plan(
-                    subscription,
-                    billing_session.requested_plan,
-                    reason=(
-                        "Plan confirmed by "
-                        "PayPal webhook."
-                    ),
-                    sync_provider=False,
-                )
+        if event_type == "BILLING.SUBSCRIPTION.ACTIVATED":
+            if billing_session:
                 billing_session.status = (
                     OrganisationBillingSession
                     .Status
@@ -785,18 +761,67 @@ def _process_paypal_webhook_event(event):
                         "updated_at",
                     ]
                 )
-            change_subscription_status(
-                subscription,
-                (
+            if (
+                billing_session
+                and subscription.provider_subscription_id
+                != billing_session.provider_session_id
+            ):
+                subscription.provider_subscription_id = (
+                    billing_session.provider_session_id
+                )
+                subscription.save(
+                    update_fields=[
+                        "provider_subscription_id",
+                        "updated_at",
+                    ]
+                )
+            if billing_session:
+                change_subscription_plan(
+                    subscription,
+                    billing_session.requested_plan,
+                    reason=(
+                        "PayPal subscription activated."
+                    ),
+                    sync_provider=False,
+                )
+            is_trial_signup = bool(
+                billing_session
+                and billing_session.metadata.get(
+                    "trial_signup"
+                )
+            )
+            if is_trial_signup:
+                if not subscription.trial_ends_at:
+                    subscription.trial_ends_at = (
+                        timezone.now()
+                        + timedelta(days=14)
+                    )
+                    subscription.save(
+                        update_fields=[
+                            "trial_ends_at",
+                            "updated_at",
+                        ]
+                    )
+                change_subscription_status(
+                    subscription,
                     OrganisationSubscription
                     .Status
-                    .ACTIVE
-                ),
-                reason=(
-                    "PayPal confirmed subscription "
-                    "activation."
-                ),
-            )
+                    .TRIAL,
+                    reason=(
+                        "PayPal subscription approved "
+                        "and 14-day trial started."
+                    ),
+                )
+            else:
+                change_subscription_status(
+                    subscription,
+                    OrganisationSubscription
+                    .Status
+                    .ACTIVE,
+                    reason=(
+                        "PayPal subscription activated."
+                    ),
+                )
             log_billing_event(
                 subscription,
                 (
@@ -865,20 +890,76 @@ def _process_paypal_webhook_event(event):
             )
             if (
                 subscription.status
+                == OrganisationSubscription.Status.TRIAL
+            ):
+                subscription.trial_ends_at = None
+                subscription.save(
+                    update_fields=[
+                        "trial_ends_at",
+                        "updated_at",
+                    ]
+                )
+                change_subscription_status(
+                    subscription,
+                    OrganisationSubscription.Status.ACTIVE,
+                    reason=(
+                        "First PayPal payment completed "
+                        "after trial."
+                    ),
+                )
+            elif (
+                subscription.status
                 == OrganisationSubscription.Status.PAST_DUE
             ):
                 change_subscription_status(
                     subscription,
-                    OrganisationSubscription
-                    .Status
-                    .ACTIVE,
+                    OrganisationSubscription.Status.ACTIVE,
                     reason=(
-                        "PayPal confirmed a successful "
-                        "subscription payment after "
-                        "a previous payment failure."
+                        "PayPal payment completed."
                     ),
                 )
             return True
+        if event_type == "BILLING.SUBSCRIPTION.UPDATED":
+            metadata = (
+                subscription.billing_metadata
+                or {}
+            )
+            pending_change = metadata.get(
+                "pending_trial_plan_change"
+            )
+            if (
+                pending_change
+                and subscription.status
+                == OrganisationSubscription.Status.TRIAL
+            ):
+                new_plan = pending_change.get(
+                    "new_plan"
+                )
+                if new_plan:
+                    change_subscription_plan(
+                        subscription,
+                        new_plan,
+                        reason=(
+                            "Trial plan updated "
+                            "through PayPal."
+                        ),
+                        sync_provider=False,
+                    )
+                    metadata.pop(
+                        "pending_trial_plan_change",
+                        None,
+                    )
+                    subscription.billing_metadata = (
+                        metadata
+                    )
+                    subscription.save(
+                        update_fields=[
+                            "billing_metadata",
+                            "updated_at",
+                        ]
+                    )
+            # Keep your existing provider-event
+            # logging underneath this.
         # --------------------------------------------------
         # PAYMENT FAILED
         # --------------------------------------------------
@@ -1046,3 +1127,203 @@ def expire_stale_billing_sessions():
         )
     )
     return expired_count
+def get_organisation_onboarding_progress(
+    organisation,
+):
+    """
+    Build onboarding progress from existing
+    organisation data.
+    No separate onboarding state is stored.
+    """
+    # ------------------------------------------
+    # ORGANISATION
+    # ------------------------------------------
+    organisation_created = True
+    # ------------------------------------------
+    # SUBSCRIPTION
+    # ------------------------------------------
+    try:
+        subscription = organisation.subscription
+    except OrganisationSubscription.DoesNotExist:
+        subscription = None
+    subscription_ready = bool(
+        subscription
+        and subscription.status
+        in {
+            OrganisationSubscription.Status.TRIAL,
+            OrganisationSubscription.Status.ACTIVE,
+            OrganisationSubscription.Status.PAST_DUE,
+        }
+    )
+    # ------------------------------------------
+    # FIRST PROPERTY
+    # ------------------------------------------
+    first_property = (
+        organisation.properties
+        .filter(
+            is_active=True,
+        )
+        .order_by("created_at")
+        .first()
+    )
+    property_created = (
+        first_property is not None
+    )
+    # ------------------------------------------
+    # TEAM STARTED
+    # ------------------------------------------
+    invitation_exists = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+        )
+        .exists()
+    )
+    additional_member_exists = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+        )
+        .exclude(
+            user=organisation.owner,
+        )
+        .exists()
+    )
+    team_started = (
+        invitation_exists
+        or additional_member_exists
+    )
+    # ------------------------------------------
+    # FIRST CHECKLIST
+    # ------------------------------------------
+    checklist_created = (
+        Checklist.objects
+        .filter(
+            property__organisation=organisation,
+        )
+        .exists()
+    )
+    # ------------------------------------------
+    # FIRST TASK
+    # ------------------------------------------
+    task_created = (
+        Task.objects
+        .filter(
+            property__organisation=organisation,
+        )
+        .exists()
+    )
+    # ------------------------------------------
+    # STEPS
+    # ------------------------------------------
+    steps = [
+        {
+            "key": "organisation",
+            "label": "Organisation created",
+            "complete": organisation_created,
+            "action_label": "",
+            "action_url": "",
+        },
+        {
+            "key": "subscription",
+            "label": "Subscription activated",
+            "complete": subscription_ready,
+            "action_label": "View subscription",
+            "action_url": reverse(
+                "operations:organisation_account",
+                kwargs={
+                    "organisation_slug": (
+                        organisation.slug
+                    ),
+                },
+            ),
+        },
+        {
+            "key": "property",
+            "label": "Create your first property",
+            "complete": property_created,
+            "action_label": "Add property",
+            "action_url": reverse(
+                "operations:organisation_property_create",
+                kwargs={
+                    "organisation_slug": (
+                        organisation.slug
+                    ),
+                },
+            ),
+        },
+        {
+            "key": "team",
+            "label": "Invite your team",
+            "complete": team_started,
+            "action_label": "Invite member",
+            "action_url": reverse(
+                "operations:organisation_invite_member",
+                kwargs={
+                    "organisation_slug": (
+                        organisation.slug
+                    ),
+                },
+            ),
+        },
+        {
+            "key": "checklist",
+            "label": "Create your first checklist",
+            "complete": checklist_created,
+            "action_label": "Create checklist",
+            "action_url": (
+                reverse(
+                    "operations:checklist_create",
+                    kwargs={
+                        "property_slug": (
+                            first_property.slug
+                        ),
+                    },
+                )
+                if first_property
+                else ""
+            ),
+        },
+        {
+            "key": "task",
+            "label": "Create your first task",
+            "complete": task_created,
+            "action_label": "Create task",
+            "action_url": (
+                reverse(
+                    "operations:task_create",
+                    kwargs={
+                        "property_slug": (
+                            first_property.slug
+                        ),
+                    },
+                )
+                if first_property
+                else ""
+            ),
+        },
+    ]
+    completed_count = sum(
+        1
+        for step in steps
+        if step["complete"]
+    )
+    total_count = len(steps)
+    percentage = round(
+        (
+            completed_count
+            / total_count
+        )
+        * 100
+    )
+    return {
+        "steps": steps,
+        "completed_count": completed_count,
+        "total_count": total_count,
+        "percentage": percentage,
+        "complete": (
+            completed_count
+            == total_count
+        ),
+    }

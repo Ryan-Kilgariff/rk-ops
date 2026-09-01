@@ -178,3 +178,15 @@ PAYPAL_WEBHOOK_ID = os.getenv(
     "PAYPAL_WEBHOOK_ID",
     "",
 )
+PAYPAL_STARTER_TRIAL_PLAN_ID = os.getenv(
+    "PAYPAL_STARTER_TRIAL_PLAN_ID",
+    "",
+)
+PAYPAL_GROWTH_TRIAL_PLAN_ID = os.getenv(
+    "PAYPAL_GROWTH_TRIAL_PLAN_ID",
+    "",
+)
+PAYPAL_PRO_TRIAL_PLAN_ID = os.getenv(
+    "PAYPAL_PRO_TRIAL_PLAN_ID",
+    "",
+)

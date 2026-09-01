@@ -271,11 +271,20 @@ class PayPalBillingAdapter(
         self,
         billing_session,
     ):
-        paypal_plan_id = (
-            self._get_paypal_plan_id(
-                billing_session.requested_plan
+        if billing_session.metadata.get(
+            "trial_signup"
+        ):
+            paypal_plan_id = (
+                self._get_paypal_trial_plan_id(
+                    billing_session.requested_plan
+                )
             )
-        )
+        else:
+            paypal_plan_id = (
+                self._get_paypal_plan_id(
+                    billing_session.requested_plan
+                )
+            )
         return_url = (
             "http://127.0.0.1:8000"
             f"/account/{billing_session.organisation.slug}"
@@ -621,3 +630,158 @@ class PayPalBillingAdapter(
             raise PayPalAPIError(
                 "PayPal is temporarily unavailable."
             ) from exc
+    def create_trial_plan(
+        self,
+        *,
+        name,
+        description,
+        amount,
+    ):
+        if not settings.PAYPAL_PRODUCT_ID:
+            raise ValueError(
+                "PAYPAL_PRODUCT_ID is not configured."
+            )
+        response = requests.post(
+            (
+                f"{self.base_url}"
+                "/v1/billing/plans"
+            ),
+            headers={
+                **self._headers(),
+                "PayPal-Request-Id": str(
+                    uuid.uuid4()
+                ),
+                "Prefer": "return=representation",
+            },
+            json={
+                "product_id": (
+                    settings.PAYPAL_PRODUCT_ID
+                ),
+                "name": name,
+                "description": description,
+                "status": "ACTIVE",
+                "billing_cycles": [
+                    {
+                        "frequency": {
+                            "interval_unit": "DAY",
+                            "interval_count": 14,
+                        },
+                        "tenure_type": "TRIAL",
+                        "sequence": 1,
+                        "total_cycles": 1,
+                    },
+                    {
+                        "frequency": {
+                            "interval_unit": "MONTH",
+                            "interval_count": 1,
+                        },
+                        "tenure_type": "REGULAR",
+                        "sequence": 2,
+                        "total_cycles": 0,
+                        "pricing_scheme": {
+                            "fixed_price": {
+                                "value": str(amount),
+                                "currency_code": "GBP",
+                            }
+                        },
+                    },
+                ],
+                "payment_preferences": {
+                    "auto_bill_outstanding": True,
+                    "payment_failure_threshold": 3,
+                },
+            },
+            timeout=20,
+        )
+        self._raise_for_paypal_error(
+            response,
+            fallback_message=(
+                "PayPal could not create "
+                "the trial subscription plan."
+            ),
+        )
+        return response.json()
+    def _get_paypal_trial_plan_id(
+        self,
+        plan,
+    ):
+        mapping = {
+            OrganisationSubscription.Plan.STARTER: (
+                settings.PAYPAL_STARTER_TRIAL_PLAN_ID
+            ),
+            OrganisationSubscription.Plan.GROWTH: (
+                settings.PAYPAL_GROWTH_TRIAL_PLAN_ID
+            ),
+            OrganisationSubscription.Plan.PRO: (
+                settings.PAYPAL_PRO_TRIAL_PLAN_ID
+            ),
+        }
+        plan_id = mapping.get(
+            plan,
+            "",
+        )
+        if not plan_id:
+            raise ValueError(
+                (
+                    "PayPal trial plan ID "
+                    f"is not configured for {plan}."
+                )
+            )
+        return plan_id
+    def revise_subscription_plan(
+        self,
+        subscription,
+        new_plan,
+        *,
+        trial_plan=False,
+    ):
+        if not subscription.provider_subscription_id:
+            raise PayPalAPIError(
+                "Subscription does not have a PayPal subscription ID."
+            )
+        if trial_plan:
+            paypal_plan_id = (
+                self._get_paypal_trial_plan_id(
+                    new_plan
+                )
+            )
+        else:
+            paypal_plan_id = (
+                self._get_paypal_plan_id(
+                    new_plan
+                )
+            )
+        response = requests.post(
+            (
+                f"{self.base_url}"
+                f"/v1/billing/subscriptions/"
+                f"{subscription.provider_subscription_id}"
+                "/revise"
+            ),
+            headers=self._headers(),
+            json={
+                "plan_id": paypal_plan_id,
+            },
+            timeout=20,
+        )
+        self._raise_for_paypal_error(
+            response,
+            fallback_message=(
+                "PayPal could not update "
+                "the subscription plan."
+            ),
+        )
+        data = response.json()
+        print(
+            "PAYPAL REVISE RESPONSE:",
+            data,
+        )
+        approval_url = None
+        for link in data.get("links", []):
+            if link.get("rel") == "approve":
+                approval_url = link.get("href")
+                break
+        return {
+            "approval_url": approval_url,
+            "provider_response": data,
+        }

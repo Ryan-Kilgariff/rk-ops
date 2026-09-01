@@ -1,0 +1,60 @@
+{% extends "operations/base.html" %}
+{% block title %}
+Choose your RK Ops plan
+{% endblock %}
+{% block topbar_title %}
+Choose plan
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    14-DAY FREE TRIAL
+</p>
+<h1 class="page-title">
+    Choose your plan
+</h1>
+<p class="page-subtitle">
+    Try any RK Ops plan free for 14 days.
+    You won't be charged until your trial ends.
+</p>
+<div class="plan-grid">
+    {% for plan in public_plans %}
+        <article class="plan-card">
+            <h2>
+                {{ plan.label }}
+            </h2>
+            <div class="plan-price">
+                £{{ plan.price }}
+                <span>/month</span>
+            </div>
+            <p>
+                {{ plan.property_limit }}
+                propert{{ plan.property_limit|pluralize:"y,ies" }}
+                ·
+                {{ plan.member_limit }}
+                team members
+            </p>
+            <ul>
+                {% for feature in plan.features %}
+                    <li>
+                        {{ feature }}
+                    </li>
+                {% endfor %}
+            </ul>
+            <form method="post">
+                {% csrf_token %}
+                <input
+                    type="hidden"
+                    name="plan"
+                    value="{{ plan.value }}"
+                >
+                <button
+                    type="submit"
+                    class="button"
+                >
+                    Start free trial
+                </button>
+            </form>
+        </article>
+    {% endfor %}
+</div>
+{% endblock %}

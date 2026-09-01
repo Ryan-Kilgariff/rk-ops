@@ -13,6 +13,21 @@ urlpatterns = [
         name="dashboard",
     ),
     path(
+        "signup/",
+        views.signup,
+        name="signup",
+    ),
+    path(
+        "account/<slug:organisation_slug>/trial/choose-plan/",
+        views.organisation_trial_choose_plan,
+        name="organisation_trial_choose_plan",
+    ),
+    path(
+        "account/<slug:organisation_slug>/trial/change-plan/",
+        views.organisation_trial_change_plan,
+        name="organisation_trial_change_plan",
+    ),
+    path(
         "p/<slug:property_slug>/tasks/",
         views.task_list,
         name="task_list",
@@ -207,6 +222,11 @@ urlpatterns = [
         "p/<slug:property_slug>/notifications/<int:notification_pk>/open/",
         views.notification_open,
         name="notification_open",
+    ),
+    path(
+        "account/organisation/new/",
+        views.organisation_create,
+        name="organisation_create",
     ),
     path(
         "account/<slug:organisation_slug>/",
