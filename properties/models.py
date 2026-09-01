@@ -95,6 +95,26 @@ class OrganisationSubscription(models.Model):
             ],
         },
     }
+    list_display = (
+        "organisation",
+        "plan",
+        "status",
+        "billing_provider",
+        "provider_subscription_id",
+        "property_limit",
+        "member_limit",
+        "updated_at",
+    )
+    list_filter = (
+        "plan",
+        "status",
+        "billing_provider",
+    )
+    search_fields = (
+        "organisation__name",
+        "provider_event_id",
+        "provider_reference",
+    )
     billing_provider = models.CharField(
         max_length=20,
         choices=BillingProvider.choices,
@@ -300,6 +320,25 @@ class OrganisationBillingEvent(models.Model):
             "provider_event",
             "Provider Event",
         )
+    list_display = (
+        "organisation",
+        "event_type",
+        "provider",
+        "provider_event_id",
+        "provider_reference",
+        "amount",
+        "currency",
+        "created_at",
+    )
+    list_filter = (
+        "event_type",
+        "provider",
+    )
+    search_fields = (
+        "organisation__name",
+        "provider_event_id",
+        "provider_reference",
+    )
     organisation = models.ForeignKey(
         Organisation,
         on_delete=models.CASCADE,
@@ -383,6 +422,23 @@ class OrganisationBillingSession(models.Model):
         FAILED = "failed", "Failed"
         CANCELLED = "cancelled", "Cancelled"
         EXPIRED = "expired", "Expired"
+    list_display = (
+        "organisation",
+        "requested_plan",
+        "status",
+        "provider",
+        "provider_session_id",
+        "amount",
+        "currency",
+        "created_at",
+        "completed_at",
+        "expires_at",
+    )
+    list_filter = (
+        "status",
+        "provider",
+        "requested_plan",
+    )
     organisation = models.ForeignKey(
         Organisation,
         on_delete=models.CASCADE,

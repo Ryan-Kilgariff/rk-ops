@@ -656,6 +656,94 @@ Account
             </a>
         </div>
     {% endif %}
+    {% if request.user.is_superuser and subscription %}
+<section class="account-section billing-diagnostics">
+    <div class="account-section-heading">
+        <div>
+            <p class="account-eyebrow">
+                ADMIN
+            </p>
+            <h2>
+                Billing Diagnostics
+            </h2>
+            <p>
+                Internal billing information for
+                troubleshooting and support.
+            </p>
+        </div>
+    </div>
+    <div class="billing-diagnostics-grid">
+        <div class="billing-diagnostic-item">
+            <span>
+                Provider
+            </span>
+            <strong>
+                {{ subscription.get_billing_provider_display }}
+            </strong>
+        </div>
+        <div class="billing-diagnostic-item">
+            <span>
+                Provider subscription ID
+            </span>
+            <strong>
+                {% if subscription.provider_subscription_id %}
+                    {{ subscription.provider_subscription_id }}
+                {% else %}
+                    —
+                {% endif %}
+            </strong>
+        </div>
+        <div class="billing-diagnostic-item">
+            <span>
+                Latest billing session
+            </span>
+            <strong>
+                {% if latest_billing_session %}
+                    {{ latest_billing_session.get_status_display }}
+                {% else %}
+                    —
+                {% endif %}
+            </strong>
+        </div>
+        <div class="billing-diagnostic-item">
+            <span>
+                Latest session ID
+            </span>
+            <strong>
+                {% if latest_billing_session and latest_billing_session.provider_session_id %}
+                    {{ latest_billing_session.provider_session_id }}
+                {% else %}
+                    —
+                {% endif %}
+            </strong>
+        </div>
+        <div class="billing-diagnostic-item">
+            <span>
+                Last billing event
+            </span>
+            <strong>
+                {% if latest_billing_event %}
+                    {{ latest_billing_event.get_event_type_display }}
+                {% else %}
+                    —
+                {% endif %}
+            </strong>
+        </div>
+        <div class="billing-diagnostic-item">
+            <span>
+                Last provider event ID
+            </span>
+            <strong>
+                {% if latest_provider_event %}
+                    {{ latest_provider_event.provider_event_id }}
+                {% else %}
+                    —
+                {% endif %}
+            </strong>
+        </div>
+    </div>
+</section>
+{% endif %}
 </section>
 {% endif %}
 {% endblock %}
@@ -1037,6 +1125,35 @@ a.account-list-item:hover {
 .plan-option .button {
     width: fit-content;
     min-width: 180px;
+}
+.billing-diagnostics {
+    margin-top: 2rem;
+}
+.billing-diagnostics-grid {
+    display: grid;
+    grid-template-columns:
+        repeat(
+            auto-fit,
+            minmax(220px, 1fr)
+        );
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.billing-diagnostic-item {
+    padding: 1rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+}
+.billing-diagnostic-item span {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.8rem;
+    color: #6b7280;
+}
+.billing-diagnostic-item strong {
+    display: block;
+    overflow-wrap: anywhere;
 }
 </style>
 {% endblock %}

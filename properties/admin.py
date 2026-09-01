@@ -7,6 +7,13 @@ from .models import (
     OrganisationSubscriptionEvent,
     Property,
 )
+from properties.models import (
+    Organisation,
+    OrganisationBillingEvent,
+    OrganisationBillingSession,
+    OrganisationSubscription,
+    Property,
+)
 @admin.register(Property)
 class PropertyAdmin(admin.ModelAdmin):
     list_display = (
@@ -43,14 +50,13 @@ class OrganisationAdmin(admin.ModelAdmin):
         "slug": ("name",),
     }
 @admin.register(OrganisationSubscription)
-class OrganisationSubscriptionAdmin(
-    admin.ModelAdmin
-):
+class OrganisationSubscriptionAdmin(admin.ModelAdmin):
     list_display = (
         "organisation",
         "plan",
         "status",
         "billing_provider",
+        "provider_subscription_id",
         "property_limit",
         "member_limit",
         "updated_at",
@@ -58,13 +64,21 @@ class OrganisationSubscriptionAdmin(
     list_filter = (
         "plan",
         "status",
+        "billing_provider",
     )
     search_fields = (
         "organisation__name",
+        "provider_customer_id",
+        "provider_subscription_id",
+        "provider_reference",
     )
     readonly_fields = (
         "property_limit",
         "member_limit",
+        "provider_customer_id",
+        "provider_subscription_id",
+        "provider_reference",
+        "billing_metadata",
         "created_at",
         "updated_at",
     )
@@ -142,15 +156,16 @@ class OrganisationBillingEventAdmin(
     list_display = (
         "organisation",
         "event_type",
+        "provider",
+        "provider_event_id",
+        "provider_reference",
         "amount",
         "currency",
-        "provider",
         "created_at",
     )
     list_filter = (
         "event_type",
         "provider",
-        "created_at",
     )
     search_fields = (
         "organisation__name",
@@ -179,16 +194,18 @@ class OrganisationBillingSessionAdmin(
         "organisation",
         "requested_plan",
         "status",
+        "provider",
+        "provider_session_id",
         "amount",
         "currency",
-        "provider",
         "created_at",
+        "completed_at",
+        "expires_at",
     )
     list_filter = (
         "status",
         "provider",
         "requested_plan",
-        "created_at",
     )
     search_fields = (
         "organisation__name",

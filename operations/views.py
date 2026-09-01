@@ -89,6 +89,8 @@ from django.contrib import messages
 from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+import logging
+logger = logging.getLogger(__name__)
 User = get_user_model()
 @login_required
 def dashboard(request, property_slug):
@@ -2116,6 +2118,35 @@ def organisation_account(
         "subscription",
         None,
     )
+    latest_billing_session = None
+    latest_billing_event = None
+    latest_provider_event = None
+    if request.user.is_superuser and subscription:
+        latest_billing_session = (
+            OrganisationBillingSession.objects
+            .filter(
+                organisation=organisation
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        latest_billing_event = (
+            OrganisationBillingEvent.objects
+            .filter(
+                organisation=organisation
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        latest_provider_event = (
+            OrganisationBillingEvent.objects
+            .filter(
+                organisation=organisation,
+                provider_event_id__gt="",
+            )
+            .order_by("-created_at")
+            .first()
+        )
     subscription_events = (
         organisation.subscription_events
         .select_related(
@@ -2288,6 +2319,15 @@ def organisation_account(
         "member_usage_width": member_usage_width,
         "available_plans": available_plans,
         "subscription_event_count": subscription_event_count,
+        "latest_billing_session": (
+            latest_billing_session
+        ),
+        "latest_billing_event": (
+            latest_billing_event
+        ),
+        "latest_provider_event": (
+            latest_provider_event
+        ),
     }
     return render(
         request,
@@ -2975,9 +3015,8 @@ def organisation_subscription_cancel(
             changed_by=request.user,
         )
     except PayPalAPIError as exc:
-        print(
-            "PAYPAL BILLING ERROR:",
-            exc,
+        logger.exception(
+            "PayPal billing operation failed."
         )
         messages.error(
             request,
@@ -3040,9 +3079,8 @@ def organisation_subscription_reactivate(
             changed_by=request.user,
         )
     except PayPalAPIError as exc:
-        print(
-            "PAYPAL BILLING ERROR:",
-            exc,
+        logger.exception(
+            "PayPal billing operation failed."
         )
         messages.error(
             request,
@@ -3089,9 +3127,8 @@ def organisation_subscription_reactivate(
                 )
             )
         except PayPalAPIError as exc:
-            print(
-                "PAYPAL BILLING ERROR:",
-                exc,
+            logger.exception(
+                "PayPal billing operation failed."
             )
             messages.error(
                 request,
@@ -3718,10 +3755,12 @@ def paypal_webhook(request):
             event=event,
         )
     except Exception as exc:
-        print(
-            "PAYPAL WEBHOOK "
-            "VERIFICATION ERROR:",
-            exc,
+        logger.info(
+            "PayPal webhook processed: "
+            "event_type=%s event_id=%s processed=%s",
+            event_type,
+            event_id,
+            processed,
         )
         return JsonResponse(
             {
@@ -3761,10 +3800,12 @@ def paypal_webhook(request):
             )
         )
     except Exception as exc:
-        print(
-            "PAYPAL WEBHOOK "
-            "PROCESSING ERROR:",
-            exc,
+        logger.info(
+            "PayPal webhook processed: "
+            "event_type=%s event_id=%s processed=%s",
+            event_type,
+            event_id,
+            processed,
         )
         return JsonResponse(
             {
@@ -3774,11 +3815,11 @@ def paypal_webhook(request):
             },
             status=500,
         )
-    print(
-        "PAYPAL WEBHOOK:",
+    logger.info(
+        "PayPal webhook processed: "
+        "event_type=%s event_id=%s processed=%s",
         event_type,
         event_id,
-        "processed=",
         processed,
     )
     return JsonResponse(
