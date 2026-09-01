@@ -4,6 +4,7 @@ from operations.services import (
     generate_recurring_tasks_for_date,
     update_subscription_statuses,
     update_task_escalations,
+    expire_stale_billing_sessions,
 )
 class Command(BaseCommand):
     help = (
@@ -22,6 +23,15 @@ class Command(BaseCommand):
         )
         subscription_updates = (
             update_subscription_statuses()
+        )
+        expired_billing_sessions = (
+            expire_stale_billing_sessions()
+        )
+        self.stdout.write(
+            (
+                "Expired billing sessions: "
+                f"{expired_billing_sessions}"
+            )
         )
         self.stdout.write(
             self.style.SUCCESS(

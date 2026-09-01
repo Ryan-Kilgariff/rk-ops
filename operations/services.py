@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.utils import timezone
 from .activity import log_activity
 from .models import ActivityLog, RecurringTask, Task
@@ -352,21 +352,19 @@ def activate_subscription(
 def cancel_subscription(
     subscription,
     *,
-    reason="Subscription cancelled.",
+    reason="",
     changed_by=None,
 ):
     adapter = get_billing_adapter(
         subscription
     )
-    adapter.cancel_subscription(
+    result = adapter.cancel_subscription(
         subscription
     )
     subscription.cancelled_at = (
         timezone.now()
     )
-    subscription.current_period_ends_at = (
-        None
-    )
+    subscription.current_period_ends_at = None
     subscription.save(
         update_fields=[
             "cancelled_at",
@@ -374,7 +372,7 @@ def cancel_subscription(
             "updated_at",
         ]
     )
-    return change_subscription_status(
+    change_subscription_status(
         subscription,
         OrganisationSubscription
         .Status
@@ -382,18 +380,52 @@ def cancel_subscription(
         reason=reason,
         changed_by=changed_by,
     )
+    return result
 def reactivate_subscription(
     subscription,
     *,
-    reason="Subscription reactivated.",
+    reason="",
     changed_by=None,
 ):
     adapter = get_billing_adapter(
         subscription
     )
-    adapter.reactivate_subscription(
+    result = adapter.reactivate_subscription(
         subscription
     )
+    if result.get("requires_checkout"):
+        return {
+            "requires_checkout": True,
+        }
+    if result.get("already_active"):
+        if subscription.cancelled_at:
+            subscription.cancelled_at = None
+            subscription.save(
+                update_fields=[
+                    "cancelled_at",
+                    "updated_at",
+                ]
+            )
+        change_subscription_status(
+            subscription,
+            OrganisationSubscription
+            .Status
+            .ACTIVE,
+            reason=reason,
+            changed_by=changed_by,
+        )
+        return {
+            "requires_checkout": False,
+            "awaiting_provider_confirmation": False,
+            "already_active": True,
+        }
+    if result.get(
+        "awaiting_provider_confirmation"
+    ):
+        return {
+            "requires_checkout": False,
+            "awaiting_provider_confirmation": True,
+        }
     subscription.cancelled_at = None
     subscription.save(
         update_fields=[
@@ -401,7 +433,7 @@ def reactivate_subscription(
             "updated_at",
         ]
     )
-    return change_subscription_status(
+    change_subscription_status(
         subscription,
         OrganisationSubscription
         .Status
@@ -409,6 +441,10 @@ def reactivate_subscription(
         reason=reason,
         changed_by=changed_by,
     )
+    return {
+        "requires_checkout": False,
+        "awaiting_provider_confirmation": False,
+    }
 def get_subscription_by_provider_subscription_id(
     provider,
     provider_subscription_id,
@@ -466,6 +502,27 @@ def create_billing_session(
     subscription,
     requested_plan,
 ):
+    existing_session = (
+        OrganisationBillingSession.objects
+        .filter(
+            subscription=subscription,
+            requested_plan=requested_plan,
+            provider=subscription.billing_provider,
+            status=(
+                OrganisationBillingSession
+                .Status
+                .PENDING
+            ),
+            expires_at__gt=timezone.now(),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if (
+        existing_session
+        and existing_session.provider_checkout_url
+    ):
+        return existing_session
     OrganisationBillingSession.objects.filter(
         subscription=subscription,
         status=OrganisationBillingSession.Status.PENDING,
@@ -490,6 +547,10 @@ def create_billing_session(
                 OrganisationBillingSession
                 .Status
                 .PENDING
+            ),
+            expires_at=(
+                timezone.now()
+                + timedelta(minutes=30)
             ),
         )
     )
@@ -561,6 +622,20 @@ def process_paypal_webhook_event(
         provider_event_id=event_id,
     ).exists():
         return False
+    try:
+        with transaction.atomic():
+            return _process_paypal_webhook_event(
+                event
+            )
+    except IntegrityError:
+        # Another webhook request may have
+        # processed the same PayPal event
+        # at the same time.
+        return False
+def _process_paypal_webhook_event(event):
+    event_id = event.get("id", "")
+    event_type = event.get("event_type", "")
+    resource = event.get("resource", {})
     paypal_subscription_id = ""
     if event_type.startswith(
         "BILLING.SUBSCRIPTION."
@@ -631,19 +706,6 @@ def process_paypal_webhook_event(
             event_type
             == "BILLING.SUBSCRIPTION.CREATED"
         ):
-            if (
-                subscription.provider_subscription_id
-                != paypal_subscription_id
-            ):
-                subscription.provider_subscription_id = (
-                    paypal_subscription_id
-                )
-                subscription.save(
-                    update_fields=[
-                        "provider_subscription_id",
-                        "updated_at",
-                    ]
-                )
             log_billing_event(
                 subscription,
                 (
@@ -656,7 +718,8 @@ def process_paypal_webhook_event(
                     paypal_subscription_id
                 ),
                 description=(
-                    "PayPal subscription created."
+                    "PayPal subscription created "
+                    "and awaiting approval."
                 ),
                 metadata=event,
             )
@@ -678,6 +741,14 @@ def process_paypal_webhook_event(
                 subscription.save(
                     update_fields=[
                         "provider_subscription_id",
+                        "updated_at",
+                    ]
+                )
+            if subscription.cancelled_at:
+                subscription.cancelled_at = None
+                subscription.save(
+                    update_fields=[
+                        "cancelled_at",
                         "updated_at",
                     ]
                 )
@@ -792,6 +863,21 @@ def process_paypal_webhook_event(
                 ),
                 metadata=event,
             )
+            if (
+                subscription.status
+                == OrganisationSubscription.Status.PAST_DUE
+            ):
+                change_subscription_status(
+                    subscription,
+                    OrganisationSubscription
+                    .Status
+                    .ACTIVE,
+                    reason=(
+                        "PayPal confirmed a successful "
+                        "subscription payment after "
+                        "a previous payment failure."
+                    ),
+                )
             return True
         # --------------------------------------------------
         # PAYMENT FAILED
@@ -935,3 +1021,28 @@ def process_paypal_webhook_event(
             metadata=event,
         )
         return True
+def expire_stale_billing_sessions():
+    now = timezone.now()
+    stale_sessions = (
+        OrganisationBillingSession.objects
+        .filter(
+            status=(
+                OrganisationBillingSession
+                .Status
+                .PENDING
+            ),
+            expires_at__isnull=False,
+            expires_at__lte=now,
+        )
+    )
+    expired_count = (
+        stale_sessions.update(
+            status=(
+                OrganisationBillingSession
+                .Status
+                .EXPIRED
+            ),
+            updated_at=now,
+        )
+    )
+    return expired_count

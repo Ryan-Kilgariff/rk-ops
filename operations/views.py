@@ -83,6 +83,7 @@ from operations.services import (
 )
 from operations.billing.paypal import (
     PayPalBillingAdapter,
+    PayPalAPIError,
 )
 from django.contrib import messages
 from django.utils import timezone
@@ -2964,14 +2965,32 @@ def organisation_subscription_cancel(
             "operations:organisation_account",
             organisation_slug=organisation.slug,
         )
-    cancel_subscription(
-        subscription,
-        reason=(
-            "Subscription cancelled "
-            "by account administrator."
-        ),
-        changed_by=request.user,
-    )
+    try:
+        cancel_subscription(
+            subscription,
+            reason=(
+                "Subscription cancelled "
+                "by organisation administrator."
+            ),
+            changed_by=request.user,
+        )
+    except PayPalAPIError as exc:
+        print(
+            "PAYPAL BILLING ERROR:",
+            exc,
+        )
+        messages.error(
+            request,
+            (
+                "PayPal could not cancel "
+                "the subscription right now. "
+                "Please try again."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
     messages.success(
         request,
         "The RK Ops subscription has been cancelled.",
@@ -3011,14 +3030,98 @@ def organisation_subscription_reactivate(
             "operations:organisation_account",
             organisation_slug=organisation.slug,
         )
-    reactivate_subscription(
-        subscription,
-        reason=(
-            "Subscription reactivated "
-            "by account administrator."
-        ),
-        changed_by=request.user,
-    )
+    try:
+        result = reactivate_subscription(
+            subscription,
+            reason=(
+                "Subscription reactivated "
+                "by organisation administrator."
+            ),
+            changed_by=request.user,
+        )
+    except PayPalAPIError as exc:
+        print(
+            "PAYPAL BILLING ERROR:",
+            exc,
+        )
+        messages.error(
+            request,
+            (
+                "PayPal could not reactivate "
+                "the subscription right now. "
+                "Please try again."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    # ------------------------------------------
+    # PAYPAL SUSPENDED → AWAIT CONFIRMATION
+    # ------------------------------------------
+    if result.get(
+        "awaiting_provider_confirmation"
+    ):
+        messages.info(
+            request,
+            (
+                "PayPal is reactivating the "
+                "subscription. RK Ops will "
+                "update automatically once "
+                "PayPal confirms activation."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    # ------------------------------------------
+    # PAYPAL CANCELLED → NEW CHECKOUT
+    # ------------------------------------------
+    if result.get(
+        "requires_checkout"
+    ):
+        try:
+            billing_session = (
+                create_billing_session(
+                    subscription,
+                    subscription.plan,
+                )
+            )
+        except PayPalAPIError as exc:
+            print(
+                "PAYPAL BILLING ERROR:",
+                exc,
+            )
+            messages.error(
+                request,
+                (
+                    "PayPal checkout could not "
+                    "be started. Please try again."
+                ),
+            )
+            return redirect(
+                "operations:organisation_account",
+                organisation_slug=organisation.slug,
+            )
+        if billing_session.provider_checkout_url:
+            return redirect(
+                billing_session.provider_checkout_url
+            )
+        messages.error(
+            request,
+            (
+                "A PayPal checkout could "
+                "not be created."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    # ------------------------------------------
+    # MANUAL / ALREADY ACTIVE PROVIDER
+    # ------------------------------------------
     messages.success(
         request,
         "The RK Ops subscription has been reactivated.",
@@ -3207,10 +3310,21 @@ def organisation_subscription_change_plan(
             "operations:organisation_account",
             organisation_slug=organisation.slug,
         )
-    billing_session = create_billing_session(
-        subscription,
-        new_plan,
-    )
+    try:
+        billing_session = (
+            create_billing_session(
+                subscription,
+                new_plan,
+            )
+        )
+    except PayPalAPIError:
+        messages.error(
+            request,
+            (
+                "PayPal checkout could not "
+                "be started. Please try again."
+            ),
+        )
     if billing_session.provider_checkout_url:
         return redirect(
             billing_session.provider_checkout_url
@@ -3431,6 +3545,25 @@ def paypal_billing_return(
         ""
     )
     if paypal_status == "ACTIVE":
+        # ------------------------------------------
+        # STORE THE NEW ACTIVE PAYPAL SUBSCRIPTION
+        # ------------------------------------------
+        if (
+            subscription.provider_subscription_id
+            != billing_session.provider_session_id
+        ):
+            subscription.provider_subscription_id = (
+                billing_session.provider_session_id
+            )
+            subscription.save(
+                update_fields=[
+                    "provider_subscription_id",
+                    "updated_at",
+                ]
+            )
+        # ------------------------------------------
+        # APPLY THE REQUESTED PLAN
+        # ------------------------------------------
         change_subscription_plan(
             subscription,
             billing_session.requested_plan,
@@ -3441,6 +3574,9 @@ def paypal_billing_return(
             changed_by=request.user,
             sync_provider=False,
         )
+        # ------------------------------------------
+        # COMPLETE BILLING SESSION
+        # ------------------------------------------
         billing_session.status = (
             OrganisationBillingSession
             .Status
@@ -3456,11 +3592,36 @@ def paypal_billing_return(
                 "updated_at",
             ]
         )
+        # ------------------------------------------
+        # CLEAR OLD CANCELLATION STATE
+        # ------------------------------------------
+        if subscription.cancelled_at:
+            subscription.cancelled_at = None
+            subscription.save(
+                update_fields=[
+                    "cancelled_at",
+                    "updated_at",
+                ]
+            )
+        # ------------------------------------------
+        # ENSURE RK OPS IS ACTIVE
+        # ------------------------------------------
+        change_subscription_status(
+            subscription,
+            OrganisationSubscription
+            .Status
+            .ACTIVE,
+            reason=(
+                "PayPal confirmed subscription "
+                "activation."
+            ),
+            changed_by=request.user,
+        )
         messages.success(
             request,
             (
                 "PayPal confirmed the subscription. "
-                "Your RK Ops plan has been updated."
+                "Your RK Ops subscription is active."
             ),
         )
     else:
@@ -3487,13 +3648,45 @@ def paypal_billing_cancel(
             organisation_slug,
         )
     )
+    billing_session = (
+        OrganisationBillingSession.objects
+        .filter(
+            organisation=organisation,
+            provider=(
+                OrganisationSubscription
+                .BillingProvider
+                .PAYPAL
+            ),
+            status=(
+                OrganisationBillingSession
+                .Status
+                .PENDING
+            ),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if billing_session:
+        billing_session.status = (
+            OrganisationBillingSession
+            .Status
+            .CANCELLED
+        )
+        billing_session.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
     messages.warning(
         request,
         "PayPal checkout was cancelled.",
     )
     return redirect(
         "operations:organisation_account",
-        organisation_slug=organisation.slug,
+        organisation_slug=(
+            organisation.slug
+        ),
     )
 @csrf_exempt
 def paypal_webhook(request):

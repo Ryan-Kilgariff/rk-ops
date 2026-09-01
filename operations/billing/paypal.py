@@ -5,6 +5,8 @@ from .base import BillingProviderAdapter
 from properties.models import (
     OrganisationSubscription,
 )
+class PayPalAPIError(Exception):
+    pass
 class PayPalBillingAdapter(
     BillingProviderAdapter
 ):
@@ -47,7 +49,9 @@ class PayPalBillingAdapter(
             },
             timeout=20,
         )
-        response.raise_for_status()
+        self._raise_for_paypal_error(
+            response
+        )
         data = response.json()
         return data["access_token"]
     def _headers(self):
@@ -77,25 +81,183 @@ class PayPalBillingAdapter(
         subscription,
     ):
         raise NotImplementedError(
-            "PayPal subscription creation "
-            "is not implemented yet."
+            "Direct PayPal subscription "
+            "creation is not implemented."
         )
+    def suspend_subscription(
+        self,
+        subscription,
+    ):
+        paypal_subscription_id = (
+            subscription.provider_subscription_id
+        )
+        if not paypal_subscription_id:
+            raise ValueError(
+                "PayPal subscription ID is missing."
+            )
+        response = requests.post(
+            (
+                f"{self.base_url}"
+                f"/v1/billing/subscriptions/"
+                f"{paypal_subscription_id}"
+                "/suspend"
+            ),
+            headers=self._headers(),
+            json={
+                "reason": (
+                    "RK Ops sandbox "
+                    "suspension test."
+                )
+            },
+            timeout=20,
+        )
+        if not response.ok:
+            print(
+                "PAYPAL SUSPEND ERROR:",
+                response.status_code,
+                response.text,
+            )
+        self._raise_for_paypal_error(
+            response
+        )
+        return {
+            "success": True,
+            "subscription_id": (
+                paypal_subscription_id
+            ),
+        }
     def cancel_subscription(
         self,
         subscription,
     ):
-        raise NotImplementedError(
-            "PayPal cancellation is not "
-            "implemented yet."
+        paypal_subscription_id = (
+            subscription.provider_subscription_id
         )
+        if not paypal_subscription_id:
+            raise ValueError(
+                "PayPal subscription ID is missing."
+            )
+        paypal_data = self.get_subscription(
+            paypal_subscription_id
+        )
+        paypal_status = paypal_data.get(
+            "status",
+            "",
+        )
+        if paypal_status in {
+            "APPROVAL_PENDING",
+            "APPROVED",
+        }:
+            return {
+                "success": True,
+                "provider_cancelled": False,
+                "pending_subscription": True,
+            }
+        if paypal_status == "CANCELLED":
+            return {
+                "success": True,
+                "provider_cancelled": False,
+                "already_cancelled": True,
+            }
+        response = requests.post(
+            (
+                f"{self.base_url}"
+                f"/v1/billing/subscriptions/"
+                f"{paypal_subscription_id}"
+                "/cancel"
+            ),
+            headers=self._headers(),
+            json={
+                "reason": (
+                    "Subscription cancelled "
+                    "from RK Ops."
+                )
+            },
+            timeout=20,
+        )
+        self._raise_for_paypal_error(
+            response
+        )
+        return {
+            "success": True,
+            "provider_cancelled": True,
+            "subscription_id": (
+                paypal_subscription_id
+            ),
+        }
     def reactivate_subscription(
         self,
         subscription,
     ):
-        raise NotImplementedError(
-            "PayPal reactivation is not "
-            "implemented yet."
+        paypal_subscription_id = (
+            subscription.provider_subscription_id
         )
+        if (
+            subscription.status
+            == OrganisationSubscription.Status.CANCELLED
+        ):
+            return {
+                "success": True,
+                "requires_checkout": True,
+            }
+        if not paypal_subscription_id:
+            raise ValueError(
+                "PayPal subscription ID is missing."
+            )
+        paypal_data = self.get_subscription(
+            paypal_subscription_id
+        )
+        paypal_status = paypal_data.get(
+            "status",
+            "",
+        )
+        if paypal_status == "ACTIVE":
+            return {
+                "success": True,
+                "requires_checkout": False,
+                "already_active": True,
+            }
+        if paypal_status == "CANCELLED":
+            return {
+                "success": True,
+                "requires_checkout": True,
+            }
+        if paypal_status == "SUSPENDED":
+            response = requests.post(
+                (
+                    f"{self.base_url}"
+                    f"/v1/billing/subscriptions/"
+                    f"{paypal_subscription_id}"
+                    "/activate"
+                ),
+                headers=self._headers(),
+                json={
+                    "reason": (
+                        "Subscription reactivated "
+                        "from RK Ops."
+                    )
+                },
+                timeout=20,
+            )
+            if not response.ok:
+                print(
+                    "PAYPAL ACTIVATE ERROR:",
+                    response.status_code,
+                    response.text,
+                )
+            self._raise_for_paypal_error(
+                response
+            )
+            return {
+                "success": True,
+                "requires_checkout": False,
+                "awaiting_provider_confirmation": True,
+            }
+        return {
+            "success": False,
+            "requires_checkout": False,
+            "provider_status": paypal_status,
+        }
     def change_plan(
         self,
         subscription,
@@ -155,7 +317,9 @@ class PayPalBillingAdapter(
             },
             timeout=20,
         )
-        response.raise_for_status()
+        self._raise_for_paypal_error(
+            response
+        )
         data = response.json()
         approval_url = ""
         for link in data.get(
@@ -301,7 +465,9 @@ class PayPalBillingAdapter(
             headers=self._headers(),
             timeout=20,
         )
-        response.raise_for_status()
+        self._raise_for_paypal_error(
+            response
+        )
         return response.json()
     def verify_webhook(
         self,
@@ -369,3 +535,89 @@ class PayPalBillingAdapter(
             )
             == "SUCCESS"
         )
+    def suspend_subscription(
+        self,
+        subscription,
+    ):
+        paypal_subscription_id = (
+            subscription.provider_subscription_id
+        )
+        if not paypal_subscription_id:
+            raise ValueError(
+                "PayPal subscription ID is missing."
+            )
+        response = requests.post(
+            (
+                f"{self.base_url}"
+                f"/v1/billing/subscriptions/"
+                f"{paypal_subscription_id}"
+                "/suspend"
+            ),
+            headers=self._headers(),
+            json={
+                "reason": (
+                    "RK Ops sandbox "
+                    "suspension test."
+                )
+            },
+            timeout=20,
+        )
+        self._raise_for_paypal_error(
+            response
+        )
+        return {
+            "success": True,
+        }
+    def _raise_for_paypal_error(
+        self,
+        response,
+        *,
+        fallback_message=(
+            "PayPal could not complete "
+            "the billing request."
+        ),
+    ):
+        if response.ok:
+            return
+        try:
+            data = response.json()
+        except ValueError:
+            data = {}
+        message = (
+            data.get("message")
+            or fallback_message
+        )
+        details = data.get(
+            "details",
+            [],
+        )
+        if details:
+            detail_message = (
+                details[0].get(
+                    "description"
+                )
+                or details[0].get(
+                    "issue"
+                )
+            )
+            if detail_message:
+                message = detail_message
+        raise PayPalAPIError(
+            message
+        )
+    def _request(
+        self,
+        method,
+        url,
+        **kwargs,
+    ):
+        try:
+            return requests.request(
+                method,
+                url,
+                **kwargs,
+            )
+        except requests.RequestException as exc:
+            raise PayPalAPIError(
+                "PayPal is temporarily unavailable."
+            ) from exc
