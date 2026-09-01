@@ -1,32 +1,37 @@
-{% extends "operations/base.html" %}
+{% extends "operations/base_onboarding.html" %}
 {% block title %}
-Create your RK Ops account
+RK Ops | Create Account
 {% endblock %}
 {% block topbar_title %}
 Create account
 {% endblock %}
 {% block content %}
-<div class="signup-page">
-    <section class="signup-card">
-        <p class="page-eyebrow">
-            RK OPS
-        </p>
-        <h1 class="page-title">
-            Create your account
-        </h1>
-        <p class="page-subtitle">
-            Start setting up your hospitality
-            operations workspace.
-        </p>
-        <form method="post">
+<div class="auth-shell">
+    <section class="auth-card">
+        <div class="auth-header">
+            <p class="auth-eyebrow">
+                RK OPS
+            </p>
+            <h1>
+                Create your account
+            </h1>
+            <p>
+                Start setting up your hospitality
+                operations workspace.
+            </p>
+        </div>
+        <form
+            method="post"
+            class="auth-form"
+        >
             {% csrf_token %}
             {% if form.non_field_errors %}
-                <div class="form-errors">
+                <div class="auth-errors">
                     {{ form.non_field_errors }}
                 </div>
             {% endif %}
             {% for field in form %}
-                <div class="form-group">
+                <div class="auth-field">
                     <label
                         for="{{ field.id_for_label }}"
                     >
@@ -34,12 +39,12 @@ Create account
                     </label>
                     {{ field }}
                     {% if field.help_text %}
-                        <div class="form-help">
-                            {{ field.help_text }}
+                        <div class="auth-help">
+                            {{ field.help_text|safe }}
                         </div>
                     {% endif %}
                     {% for error in field.errors %}
-                        <div class="form-error">
+                        <div class="auth-field-error">
                             {{ error }}
                         </div>
                     {% endfor %}
@@ -47,17 +52,19 @@ Create account
             {% endfor %}
             <button
                 type="submit"
-                class="button"
+                class="button auth-submit"
             >
                 Create account
             </button>
         </form>
-        <p class="signup-login-link">
-            Already have an account?
+        <div class="auth-footer">
+            <span>
+                Already have an account?
+            </span>
             <a href="{% url 'login' %}">
-                Log in
+                Sign in
             </a>
-        </p>
+        </div>
     </section>
 </div>
 {% endblock %}

@@ -1230,14 +1230,16 @@ def get_organisation_onboarding_progress(
             "label": "Subscription activated",
             "complete": subscription_ready,
             "action_label": "View subscription",
-            "action_url": reverse(
-                "operations:organisation_account",
-                kwargs={
-                    "organisation_slug": (
-                        organisation.slug
-                    ),
-                },
-            ),
+            "action_url":
+            ( 
+                reverse(
+                    "operations:organisation_account",
+                    kwargs={
+                        "organisation_slug": organisation.slug,
+                    },
+                )
+                + "#subscription-plans"
+            )
         },
         {
             "key": "property",
@@ -1327,3 +1329,29 @@ def get_organisation_onboarding_progress(
             == total_count
         ),
     }
+def clear_pending_trial_plan_change(
+    subscription,
+):
+    metadata = (
+        subscription.billing_metadata
+        or {}
+    )
+    if (
+        "pending_trial_plan_change"
+        not in metadata
+    ):
+        return False
+    metadata.pop(
+        "pending_trial_plan_change",
+        None,
+    )
+    subscription.billing_metadata = (
+        metadata
+    )
+    subscription.save(
+        update_fields=[
+            "billing_metadata",
+            "updated_at",
+        ]
+    )
+    return True

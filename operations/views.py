@@ -4039,6 +4039,10 @@ def organisation_trial_choose_plan(
             OrganisationSubscription.Status.PAST_DUE,
         }
     ):
+        print(
+            "TRIAL PLAN DEBUG: redirecting "
+            "because subscription already active"
+        )
         return redirect(
             "operations:organisation_account",
             organisation_slug=organisation.slug,
@@ -4177,17 +4181,6 @@ def organisation_trial_choose_plan(
                     "features"
                 ],
             }
-        )
-        messages.error(
-            request,
-            (
-                "PayPal did not return "
-                "an approval link."
-            ),
-        )
-        return redirect(
-            "operations:organisation_account",
-            organisation_slug=organisation.slug,
         )
     return render(
         request,
@@ -4388,8 +4381,9 @@ def paypal_trial_plan_return(
     messages.success(
         request,
         (
-            "PayPal approved the plan change. "
-            "RK Ops is confirming the update."
+            "PayPal approved your plan change. "
+            "It may take up to a minute for the "
+            "new plan to appear on your RK Ops account."
         ),
     )
     return redirect(

@@ -1,60 +1,74 @@
-{% extends "operations/base.html" %}
+{% extends "operations/base_onboarding.html" %}
 {% block title %}
-Choose your RK Ops plan
+RK Ops | Choose Plan
 {% endblock %}
 {% block topbar_title %}
 Choose plan
 {% endblock %}
 {% block content %}
-<p class="page-eyebrow">
-    14-DAY FREE TRIAL
-</p>
-<h1 class="page-title">
-    Choose your plan
-</h1>
-<p class="page-subtitle">
-    Try any RK Ops plan free for 14 days.
-    You won't be charged until your trial ends.
-</p>
-<div class="plan-grid">
-    {% for plan in public_plans %}
-        <article class="plan-card">
-            <h2>
-                {{ plan.label }}
-            </h2>
-            <div class="plan-price">
-                £{{ plan.price }}
-                <span>/month</span>
-            </div>
-            <p>
-                {{ plan.property_limit }}
-                propert{{ plan.property_limit|pluralize:"y,ies" }}
-                ·
-                {{ plan.member_limit }}
-                team members
-            </p>
-            <ul>
-                {% for feature in plan.features %}
-                    <li>
-                        {{ feature }}
-                    </li>
-                {% endfor %}
-            </ul>
-            <form method="post">
-                {% csrf_token %}
-                <input
-                    type="hidden"
-                    name="plan"
-                    value="{{ plan.value }}"
-                >
-                <button
-                    type="submit"
-                    class="button"
-                >
-                    Start free trial
-                </button>
-            </form>
-        </article>
-    {% endfor %}
+<div class="onboarding-shell">
+    <div class="onboarding-heading">
+        <p class="auth-eyebrow">
+            14-DAY FREE TRIAL
+        </p>
+        <h1>
+            Choose your RK Ops plan
+        </h1>
+        <p>
+            Try any plan free for 14 days.
+            You won't be charged until your trial ends.
+        </p>
+    </div>
+    <div class="onboarding-plan-grid">
+        {% for plan in public_plans %}
+            <article class="onboarding-plan-card">
+                <div>
+                    <h2>
+                        {{ plan.label }}
+                    </h2>
+                    <div class="onboarding-plan-price">
+                        £{{ plan.price }}
+                        <span>/month</span>
+                    </div>
+                    <div class="auth-help">
+                        {{ plan.property_limit }}
+                        propert{{ plan.property_limit|pluralize:"y,ies" }}
+                        ·
+                        {{ plan.member_limit }}
+                        team member{{ plan.member_limit|pluralize }}
+                    </div>
+                </div>
+                <div class="onboarding-plan-features">
+                    {% for feature in plan.features %}
+                        <div>
+                            ✓ {{ feature }}
+                        </div>
+                    {% endfor %}
+                </div>
+                <form method="post">
+                    {% csrf_token %}
+                    <input
+                        type="hidden"
+                        name="plan"
+                        value="{{ plan.value }}"
+                    >
+                    <button
+                        type="submit"
+                        class="button auth-submit"
+                    >
+                        Start {{ plan.label }} trial
+                    </button>
+                </form>
+            </article>
+        {% endfor %}
+    </div>
+    <div class="onboarding-trial-note">
+        <strong>
+            No charge today.
+        </strong>
+        Your selected plan will begin billing
+        automatically after your 14-day trial
+        unless cancelled beforehand.
+    </div>
 </div>
 {% endblock %}

@@ -1,0 +1,51 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link
+        rel="stylesheet"
+        href="{% static 'operations/css/operations.css' %}"
+    >
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+    <title>
+        {% block title %}
+            RK Ops
+        {% endblock %}
+    </title>
+    {# Keep your existing global stylesheet if you have one #}
+    {% block extra_css %}
+    {% endblock %}
+</head>
+<body class="onboarding-body">
+    <header class="onboarding-topbar">
+        <a
+            href="/"
+            class="onboarding-brand"
+        >
+            RK OPS
+        </a>
+    </header>
+    {% if messages %}
+        <div class="onboarding-messages">
+            {% for message in messages %}
+                <div
+                    class="
+                        onboarding-message
+                        onboarding-message-{{ message.tags }}
+                    "
+                >
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+    <main class="onboarding-content">
+        {% block content %}
+        {% endblock %}
+    </main>
+</body>
+</html>

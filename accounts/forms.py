@@ -209,6 +209,9 @@ class SignUpForm(UserCreationForm):
             "password1",
             "password2",
         )
+        help_texts = {
+            "username": "",
+        }
     def clean_email(self):
         email = (
             self.cleaned_data["email"]

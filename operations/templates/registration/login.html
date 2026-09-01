@@ -79,6 +79,22 @@
             padding: 11px 12px;
             font-size: 14px;
         }
+        .auth-footer {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            font-size: 0.9rem;
+        }
+        .auth-footer a {
+            font-weight: 600;
+            text-decoration: none;
+        }
+        .auth-footer a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -122,6 +138,14 @@
             Sign In
         </button>
     </form>
+    <div class="auth-footer">
+        <span>
+            New to RK Ops?
+        </span>
+        <a href="{% url 'operations:signup' %}">
+            Create an account
+        </a>
+    </div>
 </div>
 </body>
 </html>

@@ -1,20 +1,31 @@
-{% extends "operations/base.html" %}
+{% extends "operations/base_onboarding.html" %}
+{% block title %}
+RK Ops | Create Organisation
+{% endblock %}
+{% block topbar_title %}
+Create organisation
+{% endblock %}
 {% block content %}
-<div class="account-page">
-    <section class="account-section">
-        <p class="account-eyebrow">
-            GETTING STARTED
-        </p>
-        <h1>
-            Create your organisation
-        </h1>
-        <p>
-            Set up your RK Ops workspace to
-            begin adding properties and your team.
-        </p>
-        <form method="post">
+<div class="auth-shell">
+    <section class="auth-card">
+        <div class="auth-header">
+            <p class="auth-eyebrow">
+                RK OPS
+            </p>
+            <h1>
+                Create your organisation
+            </h1>
+            <p>
+                Set up the organisation that will
+                manage your properties and team.
+            </p>
+        </div>
+        <form
+            method="post"
+            class="auth-form"
+        >
             {% csrf_token %}
-            <div class="form-group">
+            <div class="auth-field">
                 <label for="id_name">
                     Organisation name
                 </label>
@@ -22,15 +33,21 @@
                     type="text"
                     id="id_name"
                     name="name"
+                    value="{{ request.POST.name|default:'' }}"
                     required
+                    autofocus
                     autocomplete="organization"
                 >
+                <div class="auth-help">
+                    This is the business or hospitality
+                    organisation that will own your RK Ops workspace.
+                </div>
             </div>
             <button
                 type="submit"
-                class="btn btn-primary"
+                class="button auth-submit"
             >
-                Create organisation
+                Continue
             </button>
         </form>
     </section>
