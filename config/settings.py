@@ -190,3 +190,7 @@ PAYPAL_PRO_TRIAL_PLAN_ID = os.getenv(
     "PAYPAL_PRO_TRIAL_PLAN_ID",
     "",
 )
+APP_BASE_URL = os.getenv(
+    "APP_BASE_URL",
+    "http://127.0.0.1:8000",
+)

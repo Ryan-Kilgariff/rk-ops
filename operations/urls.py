@@ -313,4 +313,9 @@ urlpatterns = [
         views.paypal_webhook,
         name="paypal_webhook",
     ),
+    path(
+        "account/<slug:organisation_slug>/billing/paypal/trial-plan-return/",
+        views.paypal_trial_plan_return,
+        name="paypal_trial_plan_return",
+    ),
 ]

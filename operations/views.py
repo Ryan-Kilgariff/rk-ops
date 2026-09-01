@@ -4327,3 +4327,72 @@ def organisation_trial_change_plan(
         "operations:organisation_account",
         organisation_slug=organisation.slug,
     )
+@login_required
+def paypal_trial_plan_return(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    subscription = (
+        OrganisationSubscription.objects
+        .filter(
+            organisation=organisation
+        )
+        .first()
+    )
+    if not subscription:
+        messages.error(
+            request,
+            "Subscription could not be found.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    if (
+        subscription.status
+        != OrganisationSubscription.Status.TRIAL
+    ):
+        messages.info(
+            request,
+            "Subscription update received.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    metadata = (
+        subscription.billing_metadata
+        or {}
+    )
+    pending_change = metadata.get(
+        "pending_trial_plan_change"
+    )
+    if not pending_change:
+        messages.info(
+            request,
+            (
+                "PayPal approval was received. "
+                "RK Ops is waiting for confirmation."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    messages.success(
+        request,
+        (
+            "PayPal approved the plan change. "
+            "RK Ops is confirming the update."
+        ),
+    )
+    return redirect(
+        "operations:organisation_account",
+        organisation_slug=organisation.slug,
+    )

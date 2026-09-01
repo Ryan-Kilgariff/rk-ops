@@ -761,6 +761,23 @@ class PayPalBillingAdapter(
             headers=self._headers(),
             json={
                 "plan_id": paypal_plan_id,
+                "application_context": {
+                    "brand_name": "RK Ops",
+                    "locale": "en-GB",
+                    "shipping_preference": "NO_SHIPPING",
+                    "return_url": (
+                        f"{settings.APP_BASE_URL}"
+                        f"/account/"
+                        f"{subscription.organisation.slug}"
+                        f"/billing/paypal/trial-plan-return/"
+                    ),
+                    "cancel_url": (
+                        f"{settings.APP_BASE_URL}"
+                        f"/account/"
+                        f"{subscription.organisation.slug}"
+                        f"/"
+                    ),
+                },
             },
             timeout=20,
         )
@@ -772,10 +789,6 @@ class PayPalBillingAdapter(
             ),
         )
         data = response.json()
-        print(
-            "PAYPAL REVISE RESPONSE:",
-            data,
-        )
         approval_url = None
         for link in data.get("links", []):
             if link.get("rel") == "approve":
