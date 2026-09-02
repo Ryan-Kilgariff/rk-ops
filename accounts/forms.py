@@ -238,3 +238,15 @@ class SignUpForm(UserCreationForm):
         if commit:
             user.save()
         return user
+    def clean_username(self):
+        username = (
+            self.cleaned_data["username"]
+            .strip()
+        )
+        if User.objects.filter(
+            username__iexact=username
+        ).exists():
+            raise forms.ValidationError(
+                "An account with this username already exists."
+            )
+        return username

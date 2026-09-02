@@ -1,0 +1,55 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Billing History
+{% endblock %}
+{% block topbar_title %}
+Billing History
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Account
+</p>
+<h1 class="page-title">
+    Billing History
+</h1>
+<p class="page-subtitle">
+    Billing and payment activity for
+    {{ organisation.name }}.
+</p>
+<section class="section">
+    <div class="account-list">
+        {% for event in billing_events %}
+            <div class="account-list-item">
+                <div>
+                    <strong>
+                        {{ event.get_event_type_display }}
+                    </strong>
+                    <div class="task-meta">
+                        {% if event.amount %}
+                            £{{ event.amount }}
+                            {{ event.currency }}
+                            ·
+                        {% endif %}
+                        {{ event.created_at|date:"d M Y · H:i" }}
+                    </div>
+                    {% if event.description %}
+                        <div class="task-meta">
+                            {{ event.description }}
+                        </div>
+                    {% endif %}
+                    {% if event.provider_reference %}
+                        <div class="task-meta">
+                            Reference:
+                            {{ event.provider_reference }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% empty %}
+            <div class="empty-state">
+                No billing history yet.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from operations.activity import log_activity
+from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from accounts.forms import (
@@ -20,6 +21,7 @@ from accounts.models import (
 from operations.utils import (
     require_management_access,
     require_organisation_management_access,
+    get_property_for_user,
 )
 from django.conf import settings
 from django.core.mail import send_mail
@@ -37,20 +39,44 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 logger = logging.getLogger(__name__)
 @login_required
-def team_list(request, property_slug):
+def team_list(
+    request,
+    property_slug,
+):
     property_obj = require_management_access(
         request.user,
         property_slug,
     )
     memberships = (
         PropertyMembership.objects
-        .filter(property=property_obj)
-        .select_related("user")
+        .filter(
+            property=property_obj,
+            is_active=True,
+        )
+        .select_related(
+            "user",
+        )
+        .order_by(
+            "user__username",
+        )
+    )
+    pending_invitations = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=property_obj.organisation,
+            properties=property_obj,
+            is_active=True,
+            accepted_at__isnull=True,
+            revoked_at__isnull=True,
+        )
+        .distinct()
+        .order_by("-created_at")
     )
     context = {
         "property": property_obj,
         "memberships": memberships,
         "active_page": "team",
+        "pending_invitations": pending_invitations,
     }
     return render(
         request,
@@ -58,43 +84,27 @@ def team_list(request, property_slug):
         context,
     )
 @login_required
-def team_member_create(request, property_slug):
-    property_obj = require_management_access(
-        request.user,
-        property_slug,
+def team_member_create(
+    request,
+    property_slug,
+):
+    property_obj, membership = (
+        get_property_for_user(
+            request.user,
+            property_slug,
+        )
     )
-    if request.method == "POST":
-        form = TeamMemberCreateForm(request.POST)
-        if form.is_valid():
-            user = form.save()
-            PropertyMembership.objects.create(
-                property=property_obj,
-                user=user,
-                role=form.cleaned_data["role"],
-                job_title=form.cleaned_data["job_title"],
+    organisation = property_obj.organisation
+    return redirect(
+        (
+            reverse(
+                "operations:organisation_invite_member",
+                kwargs={
+                    "organisation_slug": organisation.slug,
+                },
             )
-            log_activity(
-                property_obj=property_obj,
-                event_type=ActivityLog.EventType.TEAM_MEMBER_ADDED,
-                title=user.get_full_name() or user.username,
-                user=request.user,
-                detail=form.cleaned_data["role"],
-            )
-            return redirect(
-                "operations:team_list",
-                property_slug=property_obj.slug,
-            )
-    else:
-        form = TeamMemberCreateForm()
-    context = {
-        "property": property_obj,
-        "form": form,
-        "active_page": "team",
-    }
-    return render(
-        request,
-        "operations/team_form.html",
-        context,
+            + f"?property={property_obj.slug}"
+        )
     )
 @login_required
 def team_member_edit(request, property_slug, pk):
@@ -152,6 +162,22 @@ def organisation_invite_member(
         "subscription",
         None,
     )
+    source_property_slug = request.GET.get(
+        "property"
+    )
+    source_property = None
+    if source_property_slug:
+        source_property = (
+            organisation.properties
+            .filter(
+                slug=source_property_slug,
+                is_active=True,
+            )
+            .first()
+        )
+    # --------------------------------------------------
+    # MEMBER LIMIT
+    # --------------------------------------------------
     if subscription:
         current_member_count = (
             OrganisationMembership.objects
@@ -167,6 +193,8 @@ def organisation_invite_member(
                 organisation=organisation,
                 is_active=True,
                 accepted_at__isnull=True,
+                revoked_at__isnull=True,
+                expires_at__gt=timezone.now(),
             )
             .count()
         )
@@ -181,91 +209,199 @@ def organisation_invite_member(
             )
     current_property = (
         organisation.properties
-        .filter(is_active=True)
+        .filter(
+            is_active=True
+        )
         .order_by("name")
         .first()
     )
+    # --------------------------------------------------
+    # POST
+    # --------------------------------------------------
     if request.method == "POST":
         form = OrganisationInvitationForm(
             request.POST,
             organisation=organisation,
         )
         if form.is_valid():
-            invitation = form.save(
-                commit=False
+            invited_email = (
+                form.cleaned_data["email"]
+                .strip()
+                .lower()
             )
-            invitation.organisation = (
-                organisation
-            )
-            invitation.invited_by = (
-                request.user
-            )
-            invitation.expires_at = (
-                timezone.now()
-                + timedelta(days=7)
-            )
-            invitation.save()
-            form.save_m2m()
-            accept_path = reverse(
-                "operations:organisation_invitation_signup",
-                kwargs={
-                    "token": invitation.token,
-                },
-            )
-            accept_url = request.build_absolute_uri(
-                accept_path
-            )
-            inviter_name = (
-                request.user.get_full_name()
-                or request.user.username
-            )
-            subject = (
-                f"You're invited to join "
-                f"{organisation.name} on RK Ops"
-            )
-            property_names = list(
-                invitation.properties
-                .values_list(
-                    "name",
-                    flat=True,
+            # ------------------------------------------
+            # ALREADY AN ORGANISATION MEMBER
+            # ------------------------------------------
+            existing_member = (
+                OrganisationMembership.objects
+                .filter(
+                    organisation=organisation,
+                    is_active=True,
+                    user__email__iexact=invited_email,
                 )
+                .select_related("user")
+                .first()
             )
-            if property_names:
-                property_text = ", ".join(
-                    property_names
+            if existing_member:
+                form.add_error(
+                    "email",
+                    (
+                        "A user with this email is already "
+                        "a member of this organisation."
+                    ),
                 )
             else:
-                property_text = "No property access"
-            message = (
-                f"{inviter_name} has invited you to join "
-                f"{organisation.name} on RK Ops.\n\n"
-                f"Organisation role: "
-                f"{invitation.get_role_display()}\n"
-                f"Property role: "
-                f"{invitation.get_property_role_display()}\n\n"
-                f"Property access: {property_text}\n\n"
-                f"Accept your invitation:\n"
-                f"{accept_url}\n\n"
-                f"If you weren't expecting this invitation, "
-                f"you can ignore this email."
-            )
-            send_mail(
-                subject=subject,
-                message=message,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                recipient_list=[
-                    invitation.email,
-                ],
-                fail_silently=False,
-            )
-            return redirect(
-                "operations:organisation_account",
-                organisation_slug=organisation.slug,
-            )
-    else:
-        form = OrganisationInvitationForm(
-            organisation=organisation,
-        )
+                # --------------------------------------
+                # EXISTING PENDING INVITATION
+                # --------------------------------------
+                existing_invitation = (
+                    OrganisationInvitation.objects
+                    .filter(
+                        organisation=organisation,
+                        email__iexact=invited_email,
+                        is_active=True,
+                        accepted_at__isnull=True,
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
+                if existing_invitation:
+                    if (
+                        not existing_invitation.revoked_at
+                        and not existing_invitation.is_expired
+                    ):
+                        form.add_error(
+                            "email",
+                            (
+                                "An active invitation has "
+                                "already been sent to this email."
+                            ),
+                        )
+                    else:
+                        # Old expired/revoked invitation should
+                        # no longer block a fresh invitation.
+                        existing_invitation.is_active = False
+                        existing_invitation.save(
+                            update_fields=[
+                                "is_active",
+                            ]
+                        )
+                # --------------------------------------
+                # CREATE INVITATION
+                # --------------------------------------
+                if not form.errors:
+                    invitation = form.save(
+                        commit=False
+                    )
+                    invitation.organisation = (
+                        organisation
+                    )
+                    invitation.invited_by = (
+                        request.user
+                    )
+                    invitation.email = (
+                        invited_email
+                    )
+                    invitation.expires_at = (
+                        timezone.now()
+                        + timedelta(days=7)
+                    )
+                    invitation.save()
+                    form.save_m2m()
+                    # ----------------------------------
+                    # INVITATION URL
+                    # ----------------------------------
+                    accept_path = reverse(
+                        "operations:organisation_invitation_signup",
+                        kwargs={
+                            "token": invitation.token,
+                        },
+                    )
+                    accept_url = (
+                        request.build_absolute_uri(
+                            accept_path
+                        )
+                    )
+                    inviter_name = (
+                        request.user.get_full_name()
+                        or request.user.username
+                    )
+                    subject = (
+                        "You're invited to join "
+                        f"{organisation.name} on RK Ops"
+                    )
+                    property_names = list(
+                        invitation.properties
+                        .values_list(
+                            "name",
+                            flat=True,
+                        )
+                    )
+                    if property_names:
+                        property_text = ", ".join(
+                            property_names
+                        )
+                    else:
+                        property_text = (
+                            "No property access"
+                        )
+                    message = (
+                        f"{inviter_name} has invited you "
+                        f"to join {organisation.name} "
+                        f"on RK Ops.\n\n"
+                        f"Organisation role: "
+                        f"{invitation.get_role_display()}\n"
+                        f"Property role: "
+                        f"{invitation.get_property_role_display()}"
+                        f"\n\n"
+                        f"Property access: "
+                        f"{property_text}\n\n"
+                        f"Accept your invitation:\n"
+                        f"{accept_url}\n\n"
+                        "If you weren't expecting this "
+                        "invitation, you can ignore this email."
+                    )
+                    send_mail(
+                        subject=subject,
+                        message=message,
+                        from_email=(
+                            settings.DEFAULT_FROM_EMAIL
+                        ),
+                        recipient_list=[
+                            invitation.email,
+                        ],
+                        fail_silently=False,
+                    )
+
+                    messages.success(
+                        request,
+                        (
+                            "Invitation sent to "
+                            f"{invitation.email}."
+                        ),
+                    )
+                    if source_property:
+                        return redirect(
+                            "operations:team_list",
+                            property_slug=source_property.slug,
+                        )
+                    return redirect(
+                        "operations:organisation_account",
+                        organisation_slug=organisation.slug,
+                    )
+    # --------------------------------------------------
+    # GET
+    # --------------------------------------------------
+    form = OrganisationInvitationForm(
+        organisation=organisation,
+        initial={
+            "properties": (
+                [source_property.pk]
+                if source_property
+                else []
+            ),
+        },
+    )
     return render(
         request,
         "operations/organisation_invitation_form.html",
@@ -651,4 +787,69 @@ def organisation_invitation_resend(
     return redirect(
         "operations:organisation_account",
         organisation_slug=organisation.slug,
+    )
+@login_required
+def team_member_remove(
+    request,
+    property_slug,
+    pk,
+):
+    property_obj, current_membership = (
+        get_property_for_user(
+            request.user,
+            property_slug,
+        )
+    )
+    membership = get_object_or_404(
+        PropertyMembership,
+        pk=pk,
+        property=property_obj,
+        is_active=True,
+    )
+    if request.method == "POST":
+        membership.is_active = False
+        membership.save(
+            update_fields=[
+                "is_active",
+            ]
+        )
+        messages.success(
+            request,
+            (
+                f"{membership.user.get_username()} "
+                "has been removed from this property."
+            ),
+        )
+    return redirect(
+        "operations:team_list",
+        property_slug=property_obj.slug,
+    )
+@login_required
+def organisation_invitation_list(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    invitations = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+            accepted_at__isnull=True,
+        )
+        .order_by("-created_at")
+    )
+    return render(
+        request,
+        "operations/organisation_invitation_list.html",
+        {
+            "organisation": organisation,
+            "invitations": invitations,
+            "active_page": "account",
+        },
     )

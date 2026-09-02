@@ -22,7 +22,7 @@ Team
         href="{% url 'operations:team_member_create' property.slug %}"
         class="button"
     >
-        + Add Team Member
+        + Invite Team Member
     </a>
 </div>
 <section class="section">
@@ -72,6 +72,18 @@ Team
                     >
                         Edit
                     </a>
+                    <form
+                        method="post"
+                        action="{% url 'operations:team_member_remove' property.slug membership.pk %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="button danger-action"
+                        >
+                            Remove
+                        </button>
+                    </form>
                 </div>
             </article>
         {% empty %}
@@ -79,6 +91,83 @@ Team
                 No team members have been added yet.
             </div>
         {% endfor %}
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        Pending Invitations
+                    </h2>
+                    <div class="task-meta">
+                        Invitations for {{ property.name }}
+                        waiting to be accepted.
+                    </div>
+                </div>
+            </div>
+            <div class="team-list">
+                {% for invitation in pending_invitations %}
+                    <article class="team-card">
+                        <div class="member-avatar">
+                            {{ invitation.email|first|upper }}
+                        </div>
+                        <div class="member-main">
+                            <h3>
+                                {{ invitation.email }}
+                            </h3>
+                            <div class="task-meta">
+                                {{ invitation.get_role_display }}
+                                ·
+                                {{ invitation.get_property_role_display }}
+                            </div>
+                            {% if invitation.expires_at %}
+                                <div class="task-meta">
+                                    Expires
+                                    {{ invitation.expires_at|date:"d M Y" }}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <div class="member-side">
+                            {% if invitation.is_expired %}
+                                <span class="inactive-badge">
+                                    Expired
+                                </span>
+                            {% else %}
+                                <span class="active-badge">
+                                    Pending
+                                </span>
+                            {% endif %}
+                            <form
+                                method="post"
+                                action="{% url 'operations:organisation_invitation_resend' property.organisation.slug invitation.pk %}"
+                            >
+                                {% csrf_token %}
+                                <button
+                                    type="submit"
+                                    class="secondary-button"
+                                >
+                                    Resend
+                                </button>
+                            </form>
+                            <form
+                                method="post"
+                                action="{% url 'operations:organisation_invitation_revoke' property.organisation.slug invitation.pk %}"
+                            >
+                                {% csrf_token %}
+                                <button
+                                    type="submit"
+                                    class="button danger-action"
+                                >
+                                    Revoke
+                                </button>
+                            </form>
+                        </div>
+                    </article>
+                {% empty %}
+                    <div class="empty-state">
+                        No pending invitations for this property.
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
     </div>
 </section>
 {% endblock %}

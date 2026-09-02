@@ -318,4 +318,19 @@ urlpatterns = [
         views.paypal_trial_plan_return,
         name="paypal_trial_plan_return",
     ),
+    path(
+        "p/<slug:property_slug>/team/<int:pk>/remove/",
+        views.team_member_remove,
+        name="team_member_remove",
+    ),
+    path(
+        "account/<slug:organisation_slug>/billing/history/",
+        views.billing_history,
+        name="billing_history",
+    ),
+    path(
+        "account/<slug:organisation_slug>/invitations/",
+        views.organisation_invitation_list,
+        name="organisation_invitation_list",
+    ),
 ]

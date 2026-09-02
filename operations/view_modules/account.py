@@ -152,6 +152,19 @@ def organisation_account(
             .order_by("-created_at")
             .first()
         )
+    billing_events_queryset = (
+        OrganisationBillingEvent.objects
+        .filter(
+            organisation=organisation
+        )
+        .order_by("-created_at")
+    )
+    billing_event_count = (
+        billing_events_queryset.count()
+    )
+    billing_events = (
+        billing_events_queryset[:5]
+    )
     subscription_events = (
         organisation.subscription_events
         .select_related(
@@ -299,6 +312,22 @@ def organisation_account(
         member_usage_percent,
         100,
     )
+    pending_invitation_queryset = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+            accepted_at__isnull=True,
+            revoked_at__isnull=True,
+        )
+        .order_by("-created_at")
+    )
+    pending_invitation_count = (
+        pending_invitation_queryset.count()
+    )
+    pending_invitations = (
+        pending_invitation_queryset[:5]
+    )
     current_property = properties.first()
     context = {
         "organisation": organisation,
@@ -338,6 +367,8 @@ def organisation_account(
             trial_days_remaining
         ),
         "trial_monthly_price": trial_monthly_price,
+        "billing_events": billing_events,
+        "billing_event_count": billing_event_count,
     }
     return render(
         request,
@@ -537,4 +568,31 @@ def property_home(request):
     return redirect(
         "operations:dashboard",
         property_slug=membership.property.slug,
+    )
+@login_required
+def billing_history(
+    request,
+    organisation_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    billing_events = (
+        OrganisationBillingEvent.objects
+        .filter(
+            organisation=organisation
+        )
+        .order_by("-created_at")
+    )
+    return render(
+        request,
+        "operations/billing_history.html",
+        {
+            "organisation": organisation,
+            "billing_events": billing_events,
+            "active_page": "account",
+        },
     )

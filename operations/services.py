@@ -29,6 +29,7 @@ from operations.models import (
 from properties.models import (
     OrganisationSubscription,
 )
+from django.utils.dateparse import parse_datetime
 def generate_recurring_tasks_for_date(
     target_date,
     property_obj=None,
@@ -260,10 +261,56 @@ def update_subscription_statuses():
             and subscription.current_period_ends_at
             and subscription.current_period_ends_at <= now
         ):
+            metadata = (
+                subscription.billing_metadata
+                or {}
+            )
+            # --------------------------------------
+            # SCHEDULED CANCELLATION
+            # --------------------------------------
+            if metadata.get(
+                "cancel_at_period_end"
+            ):
+                metadata.pop(
+                    "cancel_at_period_end",
+                    None,
+                )
+                metadata.pop(
+                    "cancel_requested_at",
+                    None,
+                )
+                subscription.billing_metadata = (
+                    metadata
+                )
+                subscription.save(
+                    update_fields=[
+                        "billing_metadata",
+                        "updated_at",
+                    ]
+                )
+                changed = (
+                    change_subscription_status(
+                        subscription,
+                        OrganisationSubscription
+                        .Status
+                        .CANCELLED,
+                        reason=(
+                            "Paid subscription period "
+                            "ended after cancellation."
+                        ),
+                    )
+                )
+                if changed:
+                    updated_count += 1
+                continue
+            # --------------------------------------
+            # NORMAL BILLING PERIOD EXPIRY
+            # --------------------------------------
             changed = mark_subscription_past_due(
                 subscription,
                 reason=(
-                    "Subscription billing period expired."
+                    "Subscription billing "
+                    "period expired."
                 ),
             )
             if changed:
@@ -367,20 +414,109 @@ def cancel_subscription(
     reason="",
     changed_by=None,
 ):
+    now = timezone.now()
+    is_trial = (
+        subscription.status
+        == OrganisationSubscription.Status.TRIAL
+    )
+    has_paid_period_remaining = (
+        not is_trial
+        and subscription.current_period_ends_at
+        and subscription.current_period_ends_at > now
+    )
+    # --------------------------------------------------
+    # PAID SUBSCRIPTION:
+    # CANCEL PROVIDER RENEWAL BUT KEEP RK OPS ACCESS
+    # UNTIL THE CURRENT PAID PERIOD ENDS
+    # --------------------------------------------------
+    if has_paid_period_remaining:
+        metadata = (
+            subscription.billing_metadata
+            or {}
+        )
+        metadata["cancel_at_period_end"] = True
+        metadata["cancel_requested_at"] = (
+            now.isoformat()
+        )
+        subscription.billing_metadata = metadata
+        subscription.cancelled_at = now
+        subscription.save(
+            update_fields=[
+                "billing_metadata",
+                "cancelled_at",
+                "updated_at",
+            ]
+        )
+        adapter = get_billing_adapter(
+            subscription
+        )
+        try:
+            result = adapter.cancel_subscription(
+                subscription
+            )
+        except Exception:
+            # Provider cancellation failed,
+            # so remove the local cancellation request.
+            metadata = (
+                subscription.billing_metadata
+                or {}
+            )
+            metadata.pop(
+                "cancel_at_period_end",
+                None,
+            )
+            metadata.pop(
+                "cancel_requested_at",
+                None,
+            )
+            subscription.billing_metadata = (
+                metadata
+            )
+            subscription.cancelled_at = None
+            subscription.save(
+                update_fields=[
+                    "billing_metadata",
+                    "cancelled_at",
+                    "updated_at",
+                ]
+            )
+            raise
+        # IMPORTANT:
+        # Keep status ACTIVE and preserve
+        # current_period_ends_at.
+        return result
+    # --------------------------------------------------
+    # TRIAL OR NO PAID PERIOD REMAINING:
+    # CANCEL IMMEDIATELY
+    # --------------------------------------------------
     adapter = get_billing_adapter(
         subscription
     )
     result = adapter.cancel_subscription(
         subscription
     )
-    subscription.cancelled_at = (
-        timezone.now()
+    subscription.cancelled_at = now
+    subscription.current_period_ends_at = (
+        None
     )
-    subscription.current_period_ends_at = None
+    metadata = (
+        subscription.billing_metadata
+        or {}
+    )
+    metadata.pop(
+        "cancel_at_period_end",
+        None,
+    )
+    metadata.pop(
+        "cancel_requested_at",
+        None,
+    )
+    subscription.billing_metadata = metadata
     subscription.save(
         update_fields=[
             "cancelled_at",
             "current_period_ends_at",
+            "billing_metadata",
             "updated_at",
         ]
     )
@@ -389,7 +525,14 @@ def cancel_subscription(
         OrganisationSubscription
         .Status
         .CANCELLED,
-        reason=reason,
+        reason=(
+            reason
+            or (
+                "Trial cancelled."
+                if is_trial
+                else "Subscription cancelled."
+            )
+        ),
         changed_by=changed_by,
     )
     return result
@@ -838,6 +981,12 @@ def _process_paypal_webhook_event(event):
                 ),
                 metadata=event,
             )
+            try:
+                sync_paypal_billing_period(
+                    subscription
+                )
+            except Exception:
+                pass
             return True
         # --------------------------------------------------
         # PAYMENT COMPLETED
@@ -918,6 +1067,15 @@ def _process_paypal_webhook_event(event):
                         "PayPal payment completed."
                     ),
                 )
+            try:
+                sync_paypal_billing_period(
+                    subscription
+                )
+            except Exception:
+                # Do not fail an otherwise valid PayPal
+                # payment webhook just because the
+                # billing-period sync failed.
+                pass
             return True
         if event_type == "BILLING.SUBSCRIPTION.UPDATED":
             metadata = (
@@ -1043,6 +1201,59 @@ def _process_paypal_webhook_event(event):
             "BILLING.SUBSCRIPTION.CANCELLED",
             "BILLING.SUBSCRIPTION.EXPIRED",
         }:
+            now = timezone.now()
+            metadata = (
+                subscription.billing_metadata
+                or {}
+            )
+            cancel_at_period_end = (
+                metadata.get(
+                    "cancel_at_period_end",
+                    False,
+                )
+            )
+            has_paid_period_remaining = (
+                event_type
+                == "BILLING.SUBSCRIPTION.CANCELLED"
+                and cancel_at_period_end
+                and subscription.current_period_ends_at
+                and subscription.current_period_ends_at > now
+            )
+            # --------------------------------------------------
+            # PAYPAL HAS CANCELLED FUTURE RENEWAL,
+            # BUT THE CUSTOMER STILL HAS PAID ACCESS
+            # --------------------------------------------------
+            if has_paid_period_remaining:
+                if not subscription.cancelled_at:
+                    subscription.cancelled_at = now
+                    subscription.save(
+                        update_fields=[
+                            "cancelled_at",
+                            "updated_at",
+                        ]
+                    )
+                log_billing_event(
+                    subscription,
+                    (
+                        OrganisationBillingEvent
+                        .EventType
+                        .PROVIDER_EVENT
+                    ),
+                    provider_event_id=event_id,
+                    provider_reference=(
+                        paypal_subscription_id
+                    ),
+                    description=(
+                        "PayPal subscription cancelled. "
+                        "RK Ops access remains active "
+                        "until the end of the paid period."
+                    ),
+                    metadata=event,
+                )
+                return True
+            # --------------------------------------------------
+            # IMMEDIATE CANCELLATION / EXPIRY
+            # --------------------------------------------------
             change_subscription_status(
                 subscription,
                 (
@@ -1056,9 +1267,7 @@ def _process_paypal_webhook_event(event):
                 ),
             )
             if not subscription.cancelled_at:
-                subscription.cancelled_at = (
-                    timezone.now()
-                )
+                subscription.cancelled_at = now
                 subscription.save(
                     update_fields=[
                         "cancelled_at",
@@ -1355,3 +1564,57 @@ def clear_pending_trial_plan_change(
         ]
     )
     return True
+def sync_paypal_billing_period(
+    subscription,
+):
+    if (
+        subscription.billing_provider
+        != OrganisationSubscription
+        .BillingProvider
+        .PAYPAL
+    ):
+        return None
+    if not subscription.provider_subscription_id:
+        return None
+    adapter = get_billing_adapter(
+        subscription
+    )
+    paypal_data = adapter.get_subscription(
+        subscription.provider_subscription_id
+    )
+    billing_info = (
+        paypal_data.get("billing_info")
+        or {}
+    )
+    next_billing_time = (
+        billing_info.get(
+            "next_billing_time"
+        )
+    )
+    if not next_billing_time:
+        return None
+    parsed_date = parse_datetime(
+        next_billing_time
+    )
+    if not parsed_date:
+        return None
+    subscription.current_period_ends_at = (
+        parsed_date
+    )
+    update_fields = [
+        "current_period_ends_at",
+        "updated_at",
+    ]
+    if (
+        subscription.status
+        == OrganisationSubscription.Status.ACTIVE
+        and subscription.trial_ends_at
+    ):
+        subscription.trial_ends_at = None
+        update_fields.append(
+            "trial_ends_at"
+        )
+    subscription.save(
+        update_fields=update_fields
+    )
+    return parsed_date

@@ -1,0 +1,86 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Invitations
+{% endblock %}
+{% block topbar_title %}
+Invitations
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Organisation
+</p>
+<h1 class="page-title">
+    Pending Invitations
+</h1>
+<p class="page-subtitle">
+    Invitations waiting to be accepted for
+    {{ organisation.name }}.
+</p>
+<section class="section">
+    <div class="account-list">
+        {% for invitation in invitations %}
+            <div class="account-list-item">
+                <div>
+                    <strong>
+                        {{ invitation.email }}
+                    </strong>
+                    <div class="task-meta">
+                        {{ invitation.get_role_display }}
+                        ·
+                        {{ invitation.get_property_role_display }}
+                    </div>
+                    <div class="task-meta">
+                        Sent
+                        {{ invitation.created_at|date:"d M Y · H:i" }}
+                    </div>
+                    {% if invitation.expires_at %}
+                        <div class="task-meta">
+                            Expires
+                            {{ invitation.expires_at|date:"d M Y · H:i" }}
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="invitation-actions-inline">
+                    {% if invitation.is_expired %}
+                        <span class="invitation-status expired">
+                            Expired
+                        </span>
+                    {% else %}
+                        <span class="invitation-status pending">
+                            Pending
+                        </span>
+                    {% endif %}
+                    <form
+                        method="post"
+                        action="{% url 'operations:organisation_invitation_resend' organisation.slug invitation.pk %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="button secondary-action"
+                        >
+                            Resend
+                        </button>
+                    </form>
+                    <form
+                        method="post"
+                        action="{% url 'operations:organisation_invitation_revoke' organisation.slug invitation.pk %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="button danger-action"
+                        >
+                            Revoke
+                        </button>
+                    </form>
+                </div>
+            </div>
+        {% empty %}
+            <div class="empty-state">
+                No pending invitations.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}

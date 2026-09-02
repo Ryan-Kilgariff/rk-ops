@@ -451,6 +451,16 @@ Account
         </div>
     </section>
 {% endif %}
+{% if pending_invitation_count > 5 %}
+        <div class="history-footer">
+            <a
+                href="{% url 'operations:organisation_invitation_list' organisation.slug %}"
+                class="button secondary-action"
+            >
+                View all pending invitations
+            </a>
+        </div>
+    {% endif %}
 <section 
     class="section"
     id="subscription-plans"
@@ -517,6 +527,26 @@ Account
                 </div>
             </div>
         {% endif %}
+    {% endif %}
+    {% if subscription.status == "active" and subscription.cancelled_at %}
+        <div class="subscription-alert subscription-alert-warning">
+            <div>
+                <strong>
+                    Subscription cancelled
+                </strong>
+                <div class="task-meta">
+                    Your RK Ops access will remain active until
+                    {% if subscription.current_period_ends_at %}
+                        <strong>
+                            {{ subscription.current_period_ends_at|date:"j F Y" }}
+                        </strong>.
+                    {% else %}
+                        the end of your current billing period.
+                    {% endif %}
+                    You will not be charged again.
+                </div>
+            </div>
+        </div>
     {% endif %}
     <div class="subscription-card">
         {% if subscription %}
@@ -824,7 +854,60 @@ Account
             </a>
         </div>
     {% endif %}
-    {% if request.user.is_superuser and subscription %}
+{% if billing_events %}
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Billing History
+            </h2>
+            <div class="task-meta">
+                Recent billing and payment activity
+            </div>
+        </div>
+    </div>
+    <div class="account-list">
+        {% for event in billing_events %}
+            <div class="account-list-item">
+                <div>
+                    <strong>
+                        {{ event.get_event_type_display }}
+                    </strong>
+                    <div class="task-meta">
+                        {% if event.amount %}
+                            £{{ event.amount }}
+                            {{ event.currency }}
+                            ·
+                        {% endif %}
+                        {{ event.created_at|date:"d M Y · H:i" }}
+                    </div>
+                    {% if event.description %}
+                        <div class="task-meta">
+                            {{ event.description }}
+                        </div>
+                    {% endif %}
+                    {% if event.provider_reference %}
+                        <div class="task-meta">
+                            Ref: {{ event.provider_reference }}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</section>
+{% if billing_event_count > 5 %}
+    <div class="history-footer">
+        <a
+            href="{% url 'operations:billing_history' organisation.slug %}"
+            class="button secondary-action"
+        >
+            View Full Billing History
+        </a>
+    </div>
+{% endif %}
+{% endif %}
+{% if request.user.is_superuser and subscription %}
 <section class="account-section billing-diagnostics">
     <div class="account-section-heading">
         <div>

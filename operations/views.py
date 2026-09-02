@@ -9,11 +9,13 @@ from .view_modules.team import (
     team_list,
     team_member_create,
     team_member_edit,
+    team_member_remove,
     organisation_invite_member,
     accept_organisation_invitation,
     organisation_invitation_accept,
     organisation_invitation_signup,
     organisation_invitation_revoke,
+    organisation_invitation_list,
     organisation_invitation_resend,
 )
 from .view_modules.billing import (
@@ -31,6 +33,7 @@ from .view_modules.account import (
     organisation_account,
     organisation_property_create,
     subscription_history,
+    billing_history,
     property_home,
 )
 from .view_modules.tasks import *
