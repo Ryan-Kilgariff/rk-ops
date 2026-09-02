@@ -181,8 +181,13 @@
             {% endif %}
             <div class="user-area">
                 {% if request.user.is_authenticated %}
-                    {{ request.user.username }}
-                    ·
+                    <a
+                        href="{% url 'operations:profile' %}"
+                        class="user-profile-link"
+                    >
+                        {{ request.user.get_full_name|default:request.user.username }}
+                    -
+                    </a>
                     <form
                         method="post"
                         action="{% url 'logout' %}"

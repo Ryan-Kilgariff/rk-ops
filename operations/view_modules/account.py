@@ -2,6 +2,10 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from accounts.forms import ProfileForm
+from django.contrib import messages
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
 from django.utils.text import slugify
 from properties.forms import PropertyForm
 from django.utils.text import slugify
@@ -585,5 +589,128 @@ def billing_history(
             "organisation": organisation,
             "billing_events": billing_events,
             "active_page": "account",
+        },
+    )
+@login_required
+def profile(request):
+    if request.method == "POST":
+        form = ProfileForm(
+            request.POST,
+            instance=request.user,
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                "Your profile has been updated.",
+            )
+            return redirect(
+                "operations:profile"
+            )
+    else:
+        form = ProfileForm(
+            instance=request.user
+        )
+    property_memberships = (
+        PropertyMembership.objects
+        .filter(
+            user=request.user,
+            is_active=True,
+            property__is_active=True,
+            property__organisation__is_active=True,
+        )
+        .select_related(
+            "property",
+            "property__organisation",
+        )
+        .order_by(
+            "property__organisation__name",
+            "property__name",
+        )
+    )
+    current_membership = (
+        property_memberships.first()
+    )
+    organisation_memberships = (
+        OrganisationMembership.objects
+        .filter(
+            user=request.user,
+            is_active=True,
+            organisation__is_active=True,
+        )
+        .select_related(
+            "organisation"
+        )
+        .order_by(
+            "organisation__name"
+        )
+    )
+    return render(
+        request,
+        "operations/profile.html",
+        {
+            "form": form,
+            "property_memberships": property_memberships,
+            "organisation_memberships": organisation_memberships,
+            "property": (
+                current_membership.property
+                if current_membership
+                else None
+            ),
+            "active_page": "profile",
+        },
+    )
+@login_required
+def profile_password_change(request):
+    if request.method == "POST":
+        form = PasswordChangeForm(
+            user=request.user,
+            data=request.POST,
+        )
+        if form.is_valid():
+            user = form.save()
+            update_session_auth_hash(
+                request,
+                user,
+            )
+            messages.success(
+                request,
+                "Your password has been changed.",
+            )
+            return redirect(
+                "operations:profile"
+            )
+    else:
+        form = PasswordChangeForm(
+            user=request.user
+        )
+    current_membership = (
+        PropertyMembership.objects
+        .filter(
+            user=request.user,
+            is_active=True,
+            property__is_active=True,
+            property__organisation__is_active=True,
+        )
+        .select_related(
+            "property",
+            "property__organisation",
+        )
+        .order_by(
+            "property__name"
+        )
+        .first()
+    )
+    return render(
+        request,
+        "operations/profile_password_change.html",
+        {
+            "form": form,
+            "property": (
+                current_membership.property
+                if current_membership
+                else None
+            ),
+            "active_page": "profile",
         },
     )

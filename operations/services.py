@@ -29,6 +29,7 @@ from operations.models import (
 from properties.models import (
     OrganisationSubscription,
 )
+from operations.notifications import create_notification
 from django.utils.dateparse import parse_datetime
 def generate_recurring_tasks_for_date(
     target_date,
@@ -39,6 +40,7 @@ def generate_recurring_tasks_for_date(
         .filter(
             is_active=True,
             property__is_active=True,
+            property__organisation__is_active=True,
         )
         .select_related(
             "property",
@@ -80,7 +82,7 @@ def generate_recurring_tasks_for_date(
                 naive_due,
                 timezone.get_current_timezone(),
             )
-        Task.objects.create(
+        generated_task = Task.objects.create(
             property=recurring.property,
             recurring_source=recurring,
             scheduled_date=target_date,
@@ -92,6 +94,14 @@ def generate_recurring_tasks_for_date(
             due_at=due_at,
             status=Task.Status.OPEN,
         )
+        if generated_task.assigned_to:
+            create_notification(
+                property_obj=recurring.property,
+                recipient=generated_task.assigned_to,
+                title="Recurring task assigned",
+                message=generated_task.title,
+                task=generated_task,
+            )
         recurring.last_generated_at = timezone.now()
         recurring.last_generated_for = target_date
         recurring.save(

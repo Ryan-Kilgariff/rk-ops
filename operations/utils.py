@@ -175,3 +175,56 @@ def require_organisation_management_access(
             "Organisation management access required."
         )
     return organisation
+def require_invitation_management_access(
+    user,
+    invitation,
+):
+    organisation = invitation.organisation
+    if user.is_superuser:
+        return organisation
+    organisation_membership = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            user=user,
+            is_active=True,
+        )
+        .first()
+    )
+    if not organisation_membership:
+        raise PermissionDenied(
+            "You do not have access to this organisation."
+        )
+    if organisation_membership.role in {
+        OrganisationMembership.Role.OWNER,
+        OrganisationMembership.Role.ADMIN,
+    }:
+        return organisation
+    invitation_property_ids = set(
+        invitation.properties.values_list(
+            "id",
+            flat=True,
+        )
+    )
+    if not invitation_property_ids:
+        raise PermissionDenied(
+            "Invitation management access required."
+        )
+    manager_has_access = (
+        PropertyMembership.objects
+        .filter(
+            user=user,
+            is_active=True,
+            property_id__in=invitation_property_ids,
+            role__in={
+                PropertyMembership.Role.OWNER,
+                PropertyMembership.Role.MANAGER,
+            },
+        )
+        .exists()
+    )
+    if not manager_has_access:
+        raise PermissionDenied(
+            "Invitation management access required."
+        )
+    return organisation

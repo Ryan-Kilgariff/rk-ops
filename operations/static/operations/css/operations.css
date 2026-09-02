@@ -757,3 +757,16 @@ a {
         padding: 0 14px;
     }
 }
+.user-profile-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.75rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    cursor: pointer;
+}
+.user-profile-link:hover {
+    text-decoration: underline;
+}

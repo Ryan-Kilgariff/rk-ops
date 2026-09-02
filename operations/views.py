@@ -35,6 +35,8 @@ from .view_modules.account import (
     subscription_history,
     billing_history,
     property_home,
+    profile,
+    profile_password_change,
 )
 from .view_modules.tasks import *
 from .view_modules.handover import *

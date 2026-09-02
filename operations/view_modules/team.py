@@ -4,6 +4,9 @@ from operations.activity import log_activity
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from operations.utils import (
+    require_invitation_management_access,
+)
 from accounts.forms import (
     OrganisationInvitationForm,
     MembershipEditForm,
@@ -151,30 +154,58 @@ def organisation_invite_member(
     request,
     organisation_slug,
 ):
-    organisation = (
-        require_organisation_management_access(
-            request.user,
-            organisation_slug,
-        )
-    )
-    subscription = getattr(
-        organisation,
-        "subscription",
-        None,
-    )
     source_property_slug = request.GET.get(
         "property"
     )
     source_property = None
     if source_property_slug:
-        source_property = (
-            organisation.properties
+        source_property = require_management_access(
+            request.user,
+            source_property_slug,
+        )
+        organisation = source_property.organisation
+        if organisation.slug != organisation_slug:
+            raise PermissionDenied(
+                "This property does not belong "
+                "to this organisation."
+            )
+    else:
+        organisation = (
+            require_organisation_management_access(
+                request.user,
+                organisation_slug,
+            )
+        )
+    property_manager_invite = False
+    if source_property:
+        organisation_membership = (
+            OrganisationMembership.objects
             .filter(
-                slug=source_property_slug,
+                organisation=organisation,
+                user=request.user,
                 is_active=True,
             )
             .first()
         )
+        is_org_manager = (
+            request.user.is_superuser
+            or (
+                organisation_membership
+                and organisation_membership.role
+                in {
+                    OrganisationMembership.Role.OWNER,
+                    OrganisationMembership.Role.ADMIN,
+                }
+            )
+        )
+        property_manager_invite = (
+            not is_org_manager
+        )
+    subscription = getattr(
+        organisation,
+        "subscription",
+        None,
+    )
     # --------------------------------------------------
     # MEMBER LIMIT
     # --------------------------------------------------
@@ -223,12 +254,43 @@ def organisation_invite_member(
             request.POST,
             organisation=organisation,
         )
-        if form.is_valid():
-            invited_email = (
-                form.cleaned_data["email"]
-                .strip()
-                .lower()
+        if property_manager_invite:
+            form.fields["role"].disabled = True
+            form.fields["properties"].queryset = (
+                organisation.properties.filter(
+                    pk=source_property.pk
+                )
             )
+            allowed_property_roles = {
+                PropertyMembership.Role.SUPERVISOR,
+                PropertyMembership.Role.TEAM_MEMBER,
+            }
+            form.fields["property_role"].choices = [
+                choice
+                for choice
+                in form.fields["property_role"].choices
+                if choice[0] in allowed_property_roles
+            ]
+        if form.is_valid():
+            if property_manager_invite:
+                allowed_property_roles = {
+                    PropertyMembership.Role.SUPERVISOR,
+                    PropertyMembership.Role.TEAM_MEMBER,
+                }
+                if (
+                    form.cleaned_data["property_role"]
+                    not in allowed_property_roles
+                ):
+                    form.add_error(
+                        "property_role",
+                        "You cannot assign this property role.",
+                    )
+                if form.is_valid():
+                    invited_email = (
+                        form.cleaned_data["email"]
+                        .strip()
+                        .lower()
+                    )
             # ------------------------------------------
             # ALREADY AN ORGANISATION MEMBER
             # ------------------------------------------
@@ -293,6 +355,10 @@ def organisation_invite_member(
                     invitation = form.save(
                         commit=False
                     )
+                    if property_manager_invite:
+                        invitation.role = (
+                            OrganisationInvitation.Role.MEMBER
+                        )
                     invitation.organisation = (
                         organisation
                     )
@@ -307,7 +373,12 @@ def organisation_invite_member(
                         + timedelta(days=7)
                     )
                     invitation.save()
-                    form.save_m2m()
+                    if property_manager_invite:
+                        invitation.properties.set(
+                            [source_property]
+                        )
+                    else:
+                        form.save_m2m()
                     # ----------------------------------
                     # INVITATION URL
                     # ----------------------------------
@@ -403,6 +474,29 @@ def organisation_invite_member(
                 ),
             },
         )
+    if property_manager_invite:
+        form.fields["role"].initial = (
+            OrganisationInvitation.Role.MEMBER
+        )
+        form.fields["role"].disabled = True
+        form.fields["properties"].queryset = (
+            organisation.properties.filter(
+                pk=source_property.pk
+            )
+        )
+        form.fields["properties"].initial = [
+            source_property.pk
+        ]
+        allowed_property_roles = {
+            PropertyMembership.Role.SUPERVISOR,
+            PropertyMembership.Role.TEAM_MEMBER,
+        }
+        form.fields["property_role"].choices = [
+            choice
+            for choice
+            in form.fields["property_role"].choices
+            if choice[0] in allowed_property_roles
+        ]
     return render(
         request,
         "operations/organisation_invitation_form.html",
@@ -677,10 +771,22 @@ def organisation_invitation_revoke(
     organisation_slug,
     invitation_pk,
 ):
+    source_property_slug = request.GET.get(
+        "property"
+    )
+    invitation = get_object_or_404(
+        OrganisationInvitation.objects.select_related(
+            "organisation"
+        ).prefetch_related(
+            "properties"
+        ),
+        pk=invitation_pk,
+        organisation__slug=organisation_slug,
+    )
     organisation = (
-        require_organisation_management_access(
+        require_invitation_management_access(
             request.user,
-            organisation_slug,
+            invitation,
         )
     )
     invitation = get_object_or_404(
@@ -698,6 +804,19 @@ def organisation_invitation_revoke(
                 "revoked_at",
             ]
         )
+        messages.success(
+            request,
+            (
+                f"Invitation to "
+                f"{invitation.email} "
+                f"has been revoked."
+            ),
+        )
+    if source_property_slug:
+        return redirect(
+            "operations:team_list",
+            property_slug=source_property_slug,
+        )
     return redirect(
         "operations:organisation_account",
         organisation_slug=organisation.slug,
@@ -708,10 +827,22 @@ def organisation_invitation_resend(
     organisation_slug,
     invitation_pk,
 ):
+    source_property_slug = request.GET.get(
+        "property"
+    )
+    invitation = get_object_or_404(
+        OrganisationInvitation.objects.select_related(
+            "organisation"
+        ).prefetch_related(
+            "properties"
+        ),
+        pk=invitation_pk,
+        organisation__slug=organisation_slug,
+    )
     organisation = (
-        require_organisation_management_access(
+        require_invitation_management_access(
             request.user,
-            organisation_slug,
+            invitation,
         )
     )
     invitation = get_object_or_404(
@@ -784,6 +915,18 @@ def organisation_invitation_resend(
                 invitation.email,
             ],
             fail_silently=False,
+        )
+        messages.success(
+            request,
+            (
+                f"Invitation resent to "
+                f"{invitation.email}."
+            ),
+        )
+    if source_property_slug:
+        return redirect(
+            "operations:team_list",
+            property_slug=source_property_slug,
         )
     return redirect(
         "operations:organisation_account",

@@ -1,0 +1,141 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | My Profile
+{% endblock %}
+{% block topbar_title %}
+My Profile
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Account
+</p>
+<h1 class="page-title">
+    My Profile
+</h1>
+<p class="page-subtitle">
+    Manage your personal RK Ops account details.
+</p>
+{% if property %}
+    <a
+        href="{% url 'operations:dashboard' property.slug %}"
+        class="button secondary-action"
+    >
+        ← Back to Dashboard
+    </a>
+{% endif %}
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Personal Details
+            </h2>
+            <div class="task-meta">
+                Update your name and email address.
+            </div>
+        </div>
+    </div>
+    <form
+        method="post"
+        class="form-card"
+    >
+        {% csrf_token %}
+        <div class="form-group">
+            <label>
+                Username
+            </label>
+            <input
+                type="text"
+                class="form-control"
+                value="{{ request.user.username }}"
+                disabled
+            >
+            <div class="task-meta">
+                Username cannot currently be changed.
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="{{ form.first_name.id_for_label }}">
+                First name
+            </label>
+            {{ form.first_name }}
+            {{ form.first_name.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ form.last_name.id_for_label }}">
+                Last name
+            </label>
+            {{ form.last_name }}
+            {{ form.last_name.errors }}
+        </div>
+        <div class="form-group">
+            <label for="{{ form.email.id_for_label }}">
+                Email address
+            </label>
+            {{ form.email }}
+            {{ form.email.errors }}
+        </div>
+        <div class="form-actions">
+            <button
+                type="submit"
+                class="button"
+            >
+                Save Profile
+            </button>
+        </div>
+    </form>
+</section>
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Access
+            </h2>
+            <div class="task-meta">
+                Your current RK Ops organisation and property access.
+            </div>
+        </div>
+    </div>
+    <div class="account-list">
+        {% for membership in property_memberships %}
+            <div class="account-list-item">
+                <div>
+                    <strong>
+                        {{ membership.property.name }}
+                    </strong>
+                    <div class="task-meta">
+                        {{ membership.property.organisation.name }}
+                        ·
+                        {{ membership.get_role_display }}
+                        {% if membership.job_title %}
+                            ·
+                            {{ membership.job_title }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        {% empty %}
+            <div class="empty-state">
+                No property access assigned.
+            </div>
+        {% endfor %}
+    </div>
+</section>
+<section class="section">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title">
+                Security
+            </h2>
+            <div class="task-meta">
+                Manage your RK Ops sign-in credentials.
+            </div>
+        </div>
+    </div>
+    <a
+        href="{% url 'operations:profile_password_change' %}"
+        class="button secondary-action"
+    >
+        Change Password
+    </a>
+</section>
+{% endblock %}

@@ -137,7 +137,7 @@ Team
                             {% endif %}
                             <form
                                 method="post"
-                                action="{% url 'operations:organisation_invitation_resend' property.organisation.slug invitation.pk %}"
+                                action="{% url 'operations:organisation_invitation_resend' property.organisation.slug invitation.pk %}?property={{ property.slug }}"                           
                             >
                                 {% csrf_token %}
                                 <button
@@ -149,7 +149,7 @@ Team
                             </form>
                             <form
                                 method="post"
-                                action="{% url 'operations:organisation_invitation_revoke' property.organisation.slug invitation.pk %}"
+                                action="{% url 'operations:organisation_invitation_revoke' property.organisation.slug invitation.pk %}?property={{ property.slug }}"
                             >
                                 {% csrf_token %}
                                 <button

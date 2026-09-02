@@ -333,4 +333,14 @@ urlpatterns = [
         views.organisation_invitation_list,
         name="organisation_invitation_list",
     ),
+    path(
+        "profile/",
+        views.profile,
+        name="profile",
+    ),
+    path(
+        "profile/password/",
+        views.profile_password_change,
+        name="profile_password_change",
+    ),
 ]
