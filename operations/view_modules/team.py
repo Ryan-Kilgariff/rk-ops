@@ -392,16 +392,17 @@ def organisation_invite_member(
     # --------------------------------------------------
     # GET
     # --------------------------------------------------
-    form = OrganisationInvitationForm(
-        organisation=organisation,
-        initial={
-            "properties": (
-                [source_property.pk]
-                if source_property
-                else []
-            ),
-        },
-    )
+    if request.method != "POST":
+        form = OrganisationInvitationForm(
+            organisation=organisation,
+            initial={
+                "properties": (
+                    [source_property.pk]
+                    if source_property
+                    else []
+                ),
+            },
+        )
     return render(
         request,
         "operations/organisation_invitation_form.html",

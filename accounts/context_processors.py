@@ -59,6 +59,12 @@ def rk_ops_permissions(request):
                 .first()
             )
         if current_property:
+            (
+                current_subscription,
+                subscription_warning,
+            ) = get_subscription_context(
+                current_property
+            )
             unread_notification_count = (
                 Notification.objects
                 .filter(
@@ -118,8 +124,12 @@ def rk_ops_permissions(request):
         current_membership = memberships.filter(
             property__slug=property_slug,
         ).first()
-    if current_membership:
-        current_property = current_membership.property
+        (
+            current_subscription,
+            subscription_warning,
+        ) = get_subscription_context(
+            current_property
+        )
         can_manage_team = (
             current_membership.role
             in {
@@ -165,3 +175,19 @@ def rk_ops_permissions(request):
         "current_subscription": current_subscription,
         "subscription_warning": subscription_warning,
     }
+def get_subscription_context(
+    property_obj,
+):
+    if not property_obj:
+        return None, False
+    subscription = getattr(
+        property_obj.organisation,
+        "subscription",
+        None,
+    )
+    warning = bool(
+        subscription
+        and subscription.status
+        == subscription.Status.PAST_DUE
+    )
+    return subscription, warning

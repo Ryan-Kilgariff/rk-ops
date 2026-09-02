@@ -74,6 +74,14 @@ def task_create(request, property_slug):
             task = form.save(commit=False)
             task.property = property_obj
             task.save()
+            if task.assigned_to:
+                create_notification(
+                    property_obj=property_obj,
+                    recipient=task.assigned_to,
+                    title="Task assigned",
+                    message=task.title,
+                    task=task,
+                )
             log_activity(
                 property_obj=property_obj,
                 event_type=ActivityLog.EventType.TASK_CREATED,
@@ -114,6 +122,9 @@ def task_edit(request, property_slug, pk):
         property=property_obj,
     )
     if request.method == "POST":
+        previous_assignee_id = (
+            task.assigned_to_id
+        )
         form = TaskForm(
             request.POST,
             instance=task,
@@ -129,6 +140,35 @@ def task_edit(request, property_slug, pk):
             elif updated_task.status != Task.Status.COMPLETED:
                 updated_task.completed_at = None
             updated_task.save()
+            if (
+                previous_assignee_id
+                != updated_task.assigned_to_id
+            ):
+                log_activity(
+                    property_obj=property_obj,
+                    event_type=(
+                        ActivityLog.EventType
+                        .TASK_ASSIGNED
+                    ),
+                    title=updated_task.title,
+                    user=request.user,
+                    detail=(
+                        (
+                            "Assigned to "
+                            f"{updated_task.assigned_to.get_full_name() or updated_task.assigned_to.username}"
+                        )
+                        if updated_task.assigned_to
+                        else "Moved to unassigned work"
+                    ),
+                )
+                if updated_task.assigned_to:
+                    create_notification(
+                        property_obj=property_obj,
+                        recipient=updated_task.assigned_to,
+                        title="Task assigned",
+                        message=updated_task.title,
+                        task=updated_task,
+                    )
             return redirect(
                 "operations:task_list",
                 property_slug=property_obj.slug,

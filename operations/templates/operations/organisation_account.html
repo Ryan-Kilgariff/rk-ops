@@ -344,12 +344,18 @@ Account
                         Member limit reached
                     </span>
                 {% else %}
-                    <a
-                        href="{% url 'operations:organisation_invite_member' organisation.slug %}"
-                        class="button"
-                    >
-                        + Invite Member
-                    </a>
+                    {% if member_limit_reached %}
+                        <span class="button secondary-action disabled">
+                            Member limit reached
+                        </span>
+                    {% else %}
+                        <a
+                            href="{% url 'operations:organisation_invite_member' organisation.slug %}"
+                            class="button"
+                        >
+                            + Invite Member
+                        </a>
+                    {% endif %}
                 {% endif %}
             {% endif %}
         </div>
@@ -768,26 +774,45 @@ Account
         {% if subscription %}
             {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
                 <div class="subscription-actions">
-                    {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
-                        <form
-                            method="post"
-                            action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
-                        >
-                            {% csrf_token %}
-                            <button
-                                type="submit"
-                                class="button"
-                            >
-                                Reactivate Subscription
-                            </button>
-                        </form>
-                    {% else %}
-                        <a
-                            href="{% url 'operations:organisation_subscription_cancel_confirm' organisation.slug %}"
-                            class="button danger-action"
-                        >
-                            Cancel Subscription
-                        </a>
+                    {% if subscription %}
+                        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+                            <div class="subscription-actions">
+                                {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
+                                    <form
+                                        method="post"
+                                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
+                                    >
+                                        {% csrf_token %}
+                                        <button
+                                            type="submit"
+                                            class="button"
+                                        >
+                                            Reactivate Subscription
+                                        </button>
+                                    </form>
+                                {% elif subscription.status == "active" and subscription.cancelled_at %}
+                                    <form
+                                        method="post"
+                                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
+                                    >
+                                        {% csrf_token %}
+                                        <button
+                                            type="submit"
+                                            class="button"
+                                        >
+                                            Resume Subscription
+                                        </button>
+                                    </form>
+                                {% else %}
+                                    <a
+                                        href="{% url 'operations:organisation_subscription_cancel_confirm' organisation.slug %}"
+                                        class="button danger-action"
+                                    >
+                                        Cancel Subscription
+                                    </a>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                     {% endif %}
                 </div>
             {% endif %}

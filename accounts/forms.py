@@ -41,6 +41,13 @@ class OrganisationInvitationForm(forms.ModelForm):
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+        self.fields["properties"].required = True
+        self.fields["properties"].error_messages[
+            "required"
+        ] = (
+            "Select at least one property "
+            "for this team member."
+        )
         if organisation:
             self.fields["properties"].queryset = (
                 organisation.properties

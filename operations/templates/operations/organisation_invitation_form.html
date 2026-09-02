@@ -15,6 +15,13 @@ Invite Member
 <p class="page-subtitle">
     Invite someone to {{ organisation.name }}.
 </p>
+{% if form.non_field_errors %}
+    <div class="form-error">
+        {% for error in form.non_field_errors %}
+            {{ error }}
+        {% endfor %}
+    </div>
+{% endif %}
 <section class="section">
     <form
         method="post"
@@ -48,8 +55,14 @@ Invite Member
             </label>
             <div class="property-choice-list">
                 {{ form.properties }}
+                {% if form.properties.errors %}
+                    <div class="form-error">
+                        {% for error in form.properties.errors %}
+                            {{ error }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
             </div>
-            {{ form.properties.errors }}
         </div>
         <div class="form-actions">
             <a
@@ -143,6 +156,7 @@ Invite Member
     gap: 10px;
     margin-top: 24px;
 }
+.form-error,
 .form-errors,
 .errorlist {
     margin: 6px 0 0;

@@ -67,6 +67,14 @@ def issue_create(request, property_slug):
             issue = form.save(commit=False)
             issue.property = property_obj
             issue.save()
+            if issue.assigned_to:
+                create_notification(
+                    property_obj=property_obj,
+                    recipient=issue.assigned_to,
+                    title="Issue assigned",
+                    message=issue.title,
+                    issue=issue,
+                )
             detail_parts = [
                 issue.get_category_display(),
                 issue.get_priority_display(),
@@ -110,6 +118,7 @@ def issue_edit(request, property_slug, pk):
         property=property_obj,
     )
     if request.method == "POST":
+        previous_assignee_id = issue.assigned_to_id
         form = IssueForm(
             request.POST,
             instance=issue,
@@ -125,6 +134,35 @@ def issue_edit(request, property_slug, pk):
             elif updated_issue.status != Issue.Status.RESOLVED:
                 updated_issue.resolved_at = None
             updated_issue.save()
+            if (
+                previous_assignee_id
+                != updated_issue.assigned_to_id
+            ):
+                log_activity(
+                    property_obj=property_obj,
+                    event_type=(
+                        ActivityLog.EventType
+                        .ISSUE_ASSIGNED
+                    ),
+                    title=updated_issue.title,
+                    user=request.user,
+                    detail=(
+                        (
+                            "Assigned to "
+                            f"{updated_issue.assigned_to.get_full_name() or updated_issue.assigned_to.username}"
+                        )
+                        if updated_issue.assigned_to
+                        else "Moved to unassigned work"
+                    ),
+                )
+                if updated_issue.assigned_to:
+                    create_notification(
+                        property_obj=property_obj,
+                        recipient=updated_issue.assigned_to,
+                        title="Issue assigned",
+                        message=updated_issue.title,
+                        issue=updated_issue,
+                    )
             return redirect(
                 "operations:issue_list",
                 property_slug=property_obj.slug,

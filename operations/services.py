@@ -553,14 +553,27 @@ def reactivate_subscription(
             "requires_checkout": True,
         }
     if result.get("already_active"):
-        if subscription.cancelled_at:
-            subscription.cancelled_at = None
-            subscription.save(
-                update_fields=[
-                    "cancelled_at",
-                    "updated_at",
-                ]
-            )
+        metadata = (
+            subscription.billing_metadata
+            or {}
+        )
+        metadata.pop(
+            "cancel_at_period_end",
+            None,
+        )
+        metadata.pop(
+            "cancel_requested_at",
+            None,
+        )
+        subscription.billing_metadata = metadata
+        subscription.cancelled_at = None
+        subscription.save(
+            update_fields=[
+                "billing_metadata",
+                "cancelled_at",
+                "updated_at",
+            ]
+        )
         change_subscription_status(
             subscription,
             OrganisationSubscription
@@ -581,9 +594,23 @@ def reactivate_subscription(
             "requires_checkout": False,
             "awaiting_provider_confirmation": True,
         }
+    metadata = (
+        subscription.billing_metadata
+        or {}
+    )
+    metadata.pop(
+        "cancel_at_period_end",
+        None,
+    )
+    metadata.pop(
+        "cancel_requested_at",
+        None,
+    )
+    subscription.billing_metadata = metadata
     subscription.cancelled_at = None
     subscription.save(
         update_fields=[
+            "billing_metadata",
             "cancelled_at",
             "updated_at",
         ]

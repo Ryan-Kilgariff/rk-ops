@@ -252,14 +252,18 @@ def organisation_account(
         )
         .count()
     )
-    pending_invitation_count = (
+    pending_invitation_queryset = (
         OrganisationInvitation.objects
         .filter(
             organisation=organisation,
             is_active=True,
             accepted_at__isnull=True,
+            revoked_at__isnull=True,
         )
-        .count()
+        .order_by("-created_at")
+    )
+    pending_invitation_count = (
+        pending_invitation_queryset.count()
     )
     allocated_member_count = (
         active_member_count
@@ -282,7 +286,7 @@ def organisation_account(
         member_usage_percent = (
             round(
                 (
-                    active_member_count
+                    allocated_member_count
                     / member_limit
                 )
                 * 100
@@ -294,7 +298,7 @@ def organisation_account(
             property_count >= property_limit
         )
         member_limit_reached = (
-            active_member_count >= member_limit
+            allocated_member_count >= member_limit
         )
     else:
         property_limit = 0
@@ -311,19 +315,6 @@ def organisation_account(
     member_usage_width = min(
         member_usage_percent,
         100,
-    )
-    pending_invitation_queryset = (
-        OrganisationInvitation.objects
-        .filter(
-            organisation=organisation,
-            is_active=True,
-            accepted_at__isnull=True,
-            revoked_at__isnull=True,
-        )
-        .order_by("-created_at")
-    )
-    pending_invitation_count = (
-        pending_invitation_queryset.count()
     )
     pending_invitations = (
         pending_invitation_queryset[:5]

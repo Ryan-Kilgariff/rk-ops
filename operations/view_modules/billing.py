@@ -122,10 +122,26 @@ def organisation_subscription_reactivate(
             "This organisation does not have "
             "a subscription."
         )
-    if subscription.status not in {
-        OrganisationSubscription.Status.CANCELLED,
-        OrganisationSubscription.Status.SUSPENDED,
-    }:
+    metadata = (
+        subscription.billing_metadata
+        or {}
+    )
+    scheduled_for_cancellation = (
+        subscription.status
+        == OrganisationSubscription.Status.ACTIVE
+        and metadata.get(
+            "cancel_at_period_end",
+            False,
+        )
+    )
+    if (
+        subscription.status
+        not in {
+            OrganisationSubscription.Status.CANCELLED,
+            OrganisationSubscription.Status.SUSPENDED,
+        }
+        and not scheduled_for_cancellation
+    ):
         messages.info(
             request,
             "This subscription is already active.",
@@ -224,10 +240,16 @@ def organisation_subscription_reactivate(
     # ------------------------------------------
     # MANUAL / ALREADY ACTIVE PROVIDER
     # ------------------------------------------
-    messages.success(
-        request,
-        "The RK Ops subscription has been reactivated.",
-    )
+    if scheduled_for_cancellation:
+        messages.success(
+            request,
+            "The scheduled cancellation has been removed.",
+        )
+    else:
+        messages.success(
+            request,
+            "The RK Ops subscription has been reactivated.",
+        )
     return redirect(
         "operations:organisation_account",
         organisation_slug=organisation.slug,
