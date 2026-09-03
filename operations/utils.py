@@ -210,7 +210,7 @@ def require_invitation_management_access(
         raise PermissionDenied(
             "Invitation management access required."
         )
-    manager_has_access = (
+    managed_property_ids = set(
         PropertyMembership.objects
         .filter(
             user=user,
@@ -221,10 +221,70 @@ def require_invitation_management_access(
                 PropertyMembership.Role.MANAGER,
             },
         )
-        .exists()
+        .values_list(
+            "property_id",
+            flat=True,
+        )
     )
-    if not manager_has_access:
+    if not invitation_property_ids.issubset(
+        managed_property_ids
+    ):
         raise PermissionDenied(
             "Invitation management access required."
+        )
+    return organisation
+def require_organisation_account_access(
+    user,
+    organisation_slug,
+):
+    organisation = (
+        Organisation.objects
+        .filter(
+            slug=organisation_slug,
+            is_active=True,
+        )
+        .first()
+    )
+    if not organisation:
+        raise PermissionDenied(
+            "Organisation not found."
+        )
+    if user.is_superuser:
+        return organisation
+    organisation_membership = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            user=user,
+            is_active=True,
+        )
+        .first()
+    )
+    if not organisation_membership:
+        raise PermissionDenied(
+            "You do not have access to this organisation."
+        )
+    if organisation_membership.role in {
+        OrganisationMembership.Role.OWNER,
+        OrganisationMembership.Role.ADMIN,
+    }:
+        return organisation
+    manager_access = (
+        PropertyMembership.objects
+        .filter(
+            user=user,
+            is_active=True,
+            property__organisation=organisation,
+            property__is_active=True,
+            role__in={
+                PropertyMembership.Role.OWNER,
+                PropertyMembership.Role.MANAGER,
+            },
+        )
+        .exists()
+    )
+    if not manager_access:
+        raise PermissionDenied(
+            "You do not have access to this account."
         )
     return organisation

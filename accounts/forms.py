@@ -60,6 +60,13 @@ class OrganisationInvitationForm(forms.ModelForm):
                 .queryset.none()
             )
 class InvitationSignupForm(forms.ModelForm):
+    username = forms.CharField(
+        max_length=150,
+        label="Username",
+        help_text=(
+            "You'll use this username to sign in to RK Ops."
+        ),
+    )
     password1 = forms.CharField(
         widget=forms.PasswordInput(
             attrs={
@@ -94,6 +101,18 @@ class InvitationSignupForm(forms.ModelForm):
                 }
             ),
         }
+    def clean_username(self):
+        username = (
+            self.cleaned_data["username"]
+            .strip()
+        )
+        if User.objects.filter(
+            username__iexact=username
+        ).exists():
+            raise forms.ValidationError(
+                "This username is already in use."
+            )
+        return username
     def clean(self):
         cleaned_data = super().clean()
         password1 = cleaned_data.get("password1")
@@ -261,11 +280,17 @@ class ProfileForm(forms.ModelForm):
     class Meta:
         model = User
         fields = [
+            "username",
             "first_name",
             "last_name",
             "email",
         ]
         widgets = {
+            "username": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
             "first_name": forms.TextInput(
                 attrs={
                     "class": "form-control",
@@ -282,6 +307,26 @@ class ProfileForm(forms.ModelForm):
                 }
             ),
         }
+    def clean_username(self):
+        username = (
+            self.cleaned_data["username"]
+            .strip()
+        )
+        existing = (
+            User.objects
+            .filter(
+                username__iexact=username
+            )
+            .exclude(
+                pk=self.instance.pk
+            )
+            .exists()
+        )
+        if existing:
+            raise forms.ValidationError(
+                "This username is already in use."
+            )
+        return username
     def clean_email(self):
         email = (
             self.cleaned_data["email"]

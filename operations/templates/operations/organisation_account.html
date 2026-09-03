@@ -225,7 +225,7 @@ Account
                 Properties connected to this organisation
             </div>
         </div>
-        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+        {% if can_manage_organisation %}
             {% if property_limit_reached %}
                 <span class="limit-reached-label">
                     Property limit reached
@@ -338,7 +338,7 @@ Account
                     {{ pending_invitation_count }} pending
                 </span>
             </div>
-            {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+            {% if can_manage_organisation %}
                 {% if member_limit_reached %}
                     <span class="limit-reached-label">
                         Member limit reached
@@ -386,6 +386,7 @@ Account
         {% endfor %}
     </div>
 </section>
+{% if can_manage_organisation %}
 {% if pending_invitations %}
     <section class="section">
         <div class="section-header">
@@ -467,6 +468,7 @@ Account
             </a>
         </div>
     {% endif %}
+{% endif %}
 <section 
     class="section"
     id="subscription-plans"
@@ -678,7 +680,7 @@ Account
     </div>
 {% else %}
     {% if subscription %}
-        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+        {% if can_manage_organisation %}
             <div class="plan-selector-card">
                 <div class="plan-selector-header">
                     <h3>
@@ -772,10 +774,10 @@ Account
         {% endif %}
     {% endif %}
         {% if subscription %}
-            {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+            {% if can_manage_organisation %}
                 <div class="subscription-actions">
                     {% if subscription %}
-                        {% if request.user.is_superuser or organisation_membership.role == "owner" or organisation_membership.role == "admin" %}
+                        {% if can_manage_organisation %}
                             <div class="subscription-actions">
                                 {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
                                     <form
@@ -818,210 +820,212 @@ Account
             {% endif %}
         {% endif %}
     </section>
-{% if subscription_events %}
-<section class="section">
-    <div class="section-header">
-        <div>
-            <h2 class="section-title">
-                Subscription History
-            </h2>
-            <div class="task-meta">
-                Recent changes to this account
-            </div>
-        </div>
-    </div>
-    <div class="account-list">
-        {% for event in subscription_events %}
-            <div class="account-list-item">
+{% if can_manage_organisation %}
+    {% if subscription_events %}
+        <section class="section">
+            <div class="section-header">
                 <div>
+                    <h2 class="section-title">
+                        Subscription History
+                    </h2>
                     <div class="task-meta">
-                        <strong>
-                            {% if event.event_type == "plan_change" %}
-                                {{ event.get_previous_plan_display }}
-                                →
-                                {{ event.get_new_plan_display }}
-                            {% else %}
-                                {{ event.get_previous_status_display }}
-                                →
-                                {{ event.get_new_status_display }}
-                            {% endif %}
-                        </strong>
-                    </div>
-                    {% if event.reason %}
-                        <div class="task-meta">
-                            {{ event.reason }}
-                        </div>
-                    {% endif %}
-                    <div class="task-meta">
-                        {{ event.created_at|date:"d M Y · H:i" }}
-                        {% if event.changed_by %}
-                            ·
-                            {% if event.changed_by.get_full_name %}
-                                {{ event.changed_by.get_full_name }}
-                            {% else %}
-                                {{ event.changed_by.username }}
-                            {% endif %}
-                        {% else %}
-                            · Automated
-                        {% endif %}
+                        Recent changes to this account
                     </div>
                 </div>
             </div>
-        {% endfor %}
-    </div>
-    {% if subscription_event_count > 5 %}
-        <div class="history-footer">
-            <a
-                href="{% url 'operations:subscription_history' organisation.slug %}"
-                class="button secondary-action"
-            >
-                View Full History
-            </a>
+            <div class="account-list">
+                {% for event in subscription_events %}
+                    <div class="account-list-item">
+                        <div>
+                            <div class="task-meta">
+                                <strong>
+                                    {% if event.event_type == "plan_change" %}
+                                        {{ event.get_previous_plan_display }}
+                                        →
+                                        {{ event.get_new_plan_display }}
+                                    {% else %}
+                                        {{ event.get_previous_status_display }}
+                                        →
+                                        {{ event.get_new_status_display }}
+                                    {% endif %}
+                                </strong>
+                            </div>
+                            {% if event.reason %}
+                                <div class="task-meta">
+                                    {{ event.reason }}
+                                </div>
+                            {% endif %}
+                            <div class="task-meta">
+                                {{ event.created_at|date:"d M Y · H:i" }}
+                                {% if event.changed_by %}
+                                    ·
+                                    {% if event.changed_by.get_full_name %}
+                                        {{ event.changed_by.get_full_name }}
+                                    {% else %}
+                                        {{ event.changed_by.username }}
+                                    {% endif %}
+                                {% else %}
+                                    · Automated
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+            {% if subscription_event_count > 5 %}
+                <div class="history-footer">
+                    <a
+                        href="{% url 'operations:subscription_history' organisation.slug %}"
+                        class="button secondary-action"
+                    >
+                        View Full History
+                    </a>
+                </div>
+            {% endif %}
+            {% if billing_events %}
+                <section class="section">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="section-title">
+                                Billing History
+                            </h2>
+                            <div class="task-meta">
+                                Recent billing and payment activity
+                            </div>
+                        </div>
+                    </div>
+                    <div class="account-list">
+                        {% for event in billing_events %}
+                            <div class="account-list-item">
+                                <div>
+                                    <strong>
+                                        {{ event.get_event_type_display }}
+                                    </strong>
+                                    <div class="task-meta">
+                                        {% if event.amount %}
+                                            £{{ event.amount }}
+                                            {{ event.currency }}
+                                            ·
+                                        {% endif %}
+                                        {{ event.created_at|date:"d M Y · H:i" }}
+                                    </div>
+                                    {% if event.description %}
+                                        <div class="task-meta">
+                                            {{ event.description }}
+                                        </div>
+                                    {% endif %}
+                                    {% if event.provider_reference %}
+                                        <div class="task-meta">
+                                            Ref: {{ event.provider_reference }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </section>
+                {% if billing_event_count > 5 %}
+                    <div class="history-footer">
+                        <a
+                            href="{% url 'operations:billing_history' organisation.slug %}"
+                            class="button secondary-action"
+                        >
+                            View Full Billing History
+                        </a>
+                    </div>
+                {% endif %}
+            {% endif %}
+        {% endif %}
+    {% if request.user.is_superuser and subscription %}
+    <section class="account-section billing-diagnostics">
+        <div class="account-section-heading">
+            <div>
+                <p class="account-eyebrow">
+                    ADMIN
+                </p>
+                <h2>
+                    Billing Diagnostics
+                </h2>
+                <p>
+                    Internal billing information for
+                    troubleshooting and support.
+                </p>
+            </div>
         </div>
+        <div class="billing-diagnostics-grid">
+            <div class="billing-diagnostic-item">
+                <span>
+                    Provider
+                </span>
+                <strong>
+                    {{ subscription.get_billing_provider_display }}
+                </strong>
+            </div>
+            <div class="billing-diagnostic-item">
+                <span>
+                    Provider subscription ID
+                </span>
+                <strong>
+                    {% if subscription.provider_subscription_id %}
+                        {{ subscription.provider_subscription_id }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="billing-diagnostic-item">
+                <span>
+                    Latest billing session
+                </span>
+                <strong>
+                    {% if latest_billing_session %}
+                        {{ latest_billing_session.get_status_display }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="billing-diagnostic-item">
+                <span>
+                    Latest session ID
+                </span>
+                <strong>
+                    {% if latest_billing_session and latest_billing_session.provider_session_id %}
+                        {{ latest_billing_session.provider_session_id }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="billing-diagnostic-item">
+                <span>
+                    Last billing event
+                </span>
+                <strong>
+                    {% if latest_billing_event %}
+                        {{ latest_billing_event.get_event_type_display }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+            </div>
+            <div class="billing-diagnostic-item">
+                <span>
+                    Last provider event ID
+                </span>
+                <strong>
+                    {% if latest_provider_event %}
+                        {{ latest_provider_event.provider_event_id }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </strong>
+            </div>
+        </div>
+    </section>
     {% endif %}
-{% if billing_events %}
-<section class="section">
-    <div class="section-header">
-        <div>
-            <h2 class="section-title">
-                Billing History
-            </h2>
-            <div class="task-meta">
-                Recent billing and payment activity
-            </div>
-        </div>
-    </div>
-    <div class="account-list">
-        {% for event in billing_events %}
-            <div class="account-list-item">
-                <div>
-                    <strong>
-                        {{ event.get_event_type_display }}
-                    </strong>
-                    <div class="task-meta">
-                        {% if event.amount %}
-                            £{{ event.amount }}
-                            {{ event.currency }}
-                            ·
-                        {% endif %}
-                        {{ event.created_at|date:"d M Y · H:i" }}
-                    </div>
-                    {% if event.description %}
-                        <div class="task-meta">
-                            {{ event.description }}
-                        </div>
-                    {% endif %}
-                    {% if event.provider_reference %}
-                        <div class="task-meta">
-                            Ref: {{ event.provider_reference }}
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
-        {% endfor %}
-    </div>
-</section>
-{% if billing_event_count > 5 %}
-    <div class="history-footer">
-        <a
-            href="{% url 'operations:billing_history' organisation.slug %}"
-            class="button secondary-action"
-        >
-            View Full Billing History
-        </a>
-    </div>
-{% endif %}
-{% endif %}
-{% if request.user.is_superuser and subscription %}
-<section class="account-section billing-diagnostics">
-    <div class="account-section-heading">
-        <div>
-            <p class="account-eyebrow">
-                ADMIN
-            </p>
-            <h2>
-                Billing Diagnostics
-            </h2>
-            <p>
-                Internal billing information for
-                troubleshooting and support.
-            </p>
-        </div>
-    </div>
-    <div class="billing-diagnostics-grid">
-        <div class="billing-diagnostic-item">
-            <span>
-                Provider
-            </span>
-            <strong>
-                {{ subscription.get_billing_provider_display }}
-            </strong>
-        </div>
-        <div class="billing-diagnostic-item">
-            <span>
-                Provider subscription ID
-            </span>
-            <strong>
-                {% if subscription.provider_subscription_id %}
-                    {{ subscription.provider_subscription_id }}
-                {% else %}
-                    —
-                {% endif %}
-            </strong>
-        </div>
-        <div class="billing-diagnostic-item">
-            <span>
-                Latest billing session
-            </span>
-            <strong>
-                {% if latest_billing_session %}
-                    {{ latest_billing_session.get_status_display }}
-                {% else %}
-                    —
-                {% endif %}
-            </strong>
-        </div>
-        <div class="billing-diagnostic-item">
-            <span>
-                Latest session ID
-            </span>
-            <strong>
-                {% if latest_billing_session and latest_billing_session.provider_session_id %}
-                    {{ latest_billing_session.provider_session_id }}
-                {% else %}
-                    —
-                {% endif %}
-            </strong>
-        </div>
-        <div class="billing-diagnostic-item">
-            <span>
-                Last billing event
-            </span>
-            <strong>
-                {% if latest_billing_event %}
-                    {{ latest_billing_event.get_event_type_display }}
-                {% else %}
-                    —
-                {% endif %}
-            </strong>
-        </div>
-        <div class="billing-diagnostic-item">
-            <span>
-                Last provider event ID
-            </span>
-            <strong>
-                {% if latest_provider_event %}
-                    {{ latest_provider_event.provider_event_id }}
-                {% else %}
-                    —
-                {% endif %}
-            </strong>
-        </div>
-    </div>
-</section>
 {% endif %}
 </section>
-{% endif %}
 {% endblock %}
 {% block extra_css %}
 <style>

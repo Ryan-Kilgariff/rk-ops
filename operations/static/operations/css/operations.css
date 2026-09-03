@@ -770,3 +770,18 @@ a {
 .user-profile-link:hover {
     text-decoration: underline;
 }
+.team-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.team-actions form {
+    margin: 0;
+}
+.team-actions .button {
+    width: auto;
+}
+.team-actions .button {
+    padding: 8px 12px;
+}

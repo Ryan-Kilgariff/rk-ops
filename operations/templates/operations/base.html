@@ -95,12 +95,14 @@
             {% endif %} 
             <div class="nav-divider"></div> 
             {% if property and property.organisation %}
-                <a
-                    href="{% url 'operations:account_home' %}"
-                    class="nav-link {% if active_page == 'account' %}active{% endif %}"
-                >
-                    Account
-                </a>
+                {% if can_view_organisation_account %}      
+                    <a
+                        href="{% url 'operations:account_home' %}"
+                        class="nav-link {% if active_page == 'account' %}active{% endif %}"
+                    >
+                        Account
+                    </a>
+                {% endif %}    
             {% endif %}
         </nav>
         <div class="sidebar-footer">

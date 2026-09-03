@@ -51,18 +51,53 @@ def team_list(
         property_slug,
     )
     memberships = (
-        PropertyMembership.objects
-        .filter(
-            property=property_obj,
-            is_active=True,
+            PropertyMembership.objects
+            .filter(
+                property=property_obj,
+                is_active=True,
+            )
+            .select_related(
+                "user",
+            )
+            .order_by(
+                "user__username",
+            )
         )
-        .select_related(
-            "user",
+    role_rank = {
+        PropertyMembership.Role.OWNER: 4,
+        PropertyMembership.Role.MANAGER: 3,
+        PropertyMembership.Role.SUPERVISOR: 2,
+        PropertyMembership.Role.TEAM_MEMBER: 1,
+    }
+    acting_membership = None
+    if not request.user.is_superuser:
+        acting_membership = (
+            PropertyMembership.objects
+            .filter(
+                property=property_obj,
+                user=request.user,
+                is_active=True,
+            )
+            .first()
         )
-        .order_by(
-            "user__username",
+    team_rows = []
+    for membership in memberships:
+        can_manage_member = False
+        if request.user.is_superuser:
+            can_manage_member = True
+        elif (
+            acting_membership
+            and membership.user_id != request.user.id
+            and role_rank[membership.role]
+            < role_rank[acting_membership.role]
+        ):
+            can_manage_member = True
+        team_rows.append(
+            {
+                "membership": membership,
+                "can_manage_member": can_manage_member,
+            }
         )
-    )
     pending_invitations = (
         OrganisationInvitation.objects
         .filter(
@@ -80,6 +115,7 @@ def team_list(
         "memberships": memberships,
         "active_page": "team",
         "pending_invitations": pending_invitations,
+        "team_rows": team_rows,
     }
     return render(
         request,
@@ -110,36 +146,120 @@ def team_member_create(
         )
     )
 @login_required
-def team_member_edit(request, property_slug, pk):
+def team_member_edit(
+    request,
+    property_slug,
+    pk,
+):
     property_obj = require_management_access(
         request.user,
         property_slug,
     )
-    membership = get_object_or_404(
+    target_membership = get_object_or_404(
         PropertyMembership.objects.select_related(
             "user",
         ),
         pk=pk,
         property=property_obj,
+        is_active=True,
     )
+    role_rank = {
+        PropertyMembership.Role.OWNER: 4,
+        PropertyMembership.Role.MANAGER: 3,
+        PropertyMembership.Role.SUPERVISOR: 2,
+        PropertyMembership.Role.TEAM_MEMBER: 1,
+    }
+    acting_membership = None
+    if not request.user.is_superuser:
+        acting_membership = get_object_or_404(
+            PropertyMembership,
+            property=property_obj,
+            user=request.user,
+            is_active=True,
+        )
+        # Managers/owners cannot edit someone
+        # at the same or a higher level.
+        if (
+            role_rank[target_membership.role]
+            >= role_rank[acting_membership.role]
+        ):
+            raise PermissionDenied(
+                "You cannot manage this team member."
+            )
     if request.method == "POST":
         form = MembershipEditForm(
             request.POST,
-            instance=membership,
+            instance=target_membership,
         )
         if form.is_valid():
-            form.save()
-            return redirect(
-                "operations:team_list",
-                property_slug=property_obj.slug,
-            )
+            new_role = form.cleaned_data["role"]
+            # ------------------------------------------
+            # ROLE HIERARCHY
+            # ------------------------------------------
+            if (
+                not request.user.is_superuser
+                and role_rank[new_role]
+                >= role_rank[acting_membership.role]
+            ):
+                form.add_error(
+                    "role",
+                    "You cannot assign this role.",
+                )
+            # ------------------------------------------
+            # LAST OWNER PROTECTION
+            # ------------------------------------------
+            if (
+                target_membership.role
+                == PropertyMembership.Role.OWNER
+                and new_role
+                != PropertyMembership.Role.OWNER
+            ):
+                owner_count = (
+                    PropertyMembership.objects
+                    .filter(
+                        property=property_obj,
+                        role=PropertyMembership.Role.OWNER,
+                        is_active=True,
+                    )
+                    .count()
+                )
+                if owner_count <= 1:
+                    form.add_error(
+                        "role",
+                        (
+                            "The final property owner "
+                            "cannot be demoted."
+                        ),
+                    )
+            if not form.errors:
+                form.save()
+                messages.success(
+                    request,
+                    "Team member updated.",
+                )
+                return redirect(
+                    "operations:team_list",
+                    property_slug=property_obj.slug,
+                )
     else:
         form = MembershipEditForm(
-            instance=membership,
+            instance=target_membership,
         )
+        # ------------------------------------------
+        # RESTRICT DROPDOWN FOR NON-SUPERUSERS
+        # ------------------------------------------
+        if acting_membership:
+            form.fields["role"].choices = [
+                choice
+                for choice in form.fields["role"].choices
+                if (
+                    role_rank.get(choice[0], 0)
+                    < role_rank[acting_membership.role]
+                )
+            ]
     context = {
         "property": property_obj,
-        "membership": membership,
+        "membership": target_membership,
         "form": form,
         "active_page": "team",
         "form_mode": "edit",
@@ -272,6 +392,11 @@ def organisation_invite_member(
                 if choice[0] in allowed_property_roles
             ]
         if form.is_valid():
+            invited_email = (
+                form.cleaned_data["email"]
+                .strip()
+                .lower()
+            )
             if property_manager_invite:
                 allowed_property_roles = {
                     PropertyMembership.Role.SUPERVISOR,
@@ -284,12 +409,6 @@ def organisation_invite_member(
                     form.add_error(
                         "property_role",
                         "You cannot assign this property role.",
-                    )
-                if form.is_valid():
-                    invited_email = (
-                        form.cleaned_data["email"]
-                        .strip()
-                        .lower()
                     )
             # ------------------------------------------
             # ALREADY AN ORGANISATION MEMBER
@@ -709,22 +828,9 @@ def organisation_invitation_signup(
                 commit=False
             )
             user.email = invited_email
-            base_username = (
-                invited_email
-                .split("@")[0]
-                .replace(".", "")
-                .replace("-", "")
+            user.username = (
+                form.cleaned_data["username"]
             )
-            username = base_username
-            counter = 2
-            while User.objects.filter(
-                username=username
-            ).exists():
-                username = (
-                    f"{base_username}{counter}"
-                )
-                counter += 1
-            user.username = username
             user.set_password(
                 form.cleaned_data["password1"]
             )
@@ -938,21 +1044,68 @@ def team_member_remove(
     property_slug,
     pk,
 ):
-    property_obj, current_membership = (
-        get_property_for_user(
-            request.user,
-            property_slug,
-        )
+    property_obj = require_management_access(
+        request.user,
+        property_slug,
     )
-    membership = get_object_or_404(
-        PropertyMembership,
+    target_membership = get_object_or_404(
+        PropertyMembership.objects.select_related(
+            "user",
+        ),
         pk=pk,
         property=property_obj,
         is_active=True,
     )
+    role_rank = {
+        PropertyMembership.Role.OWNER: 4,
+        PropertyMembership.Role.MANAGER: 3,
+        PropertyMembership.Role.SUPERVISOR: 2,
+        PropertyMembership.Role.TEAM_MEMBER: 1,
+    }
+    if not request.user.is_superuser:
+        acting_membership = get_object_or_404(
+            PropertyMembership,
+            property=property_obj,
+            user=request.user,
+            is_active=True,
+        )
+        if (
+            role_rank[target_membership.role]
+            >= role_rank[acting_membership.role]
+        ):
+            raise PermissionDenied(
+                "You cannot remove this team member."
+            )
+    # Do not remove yourself through team management.
+    if (
+        target_membership.user_id
+        == request.user.id
+        and not request.user.is_superuser
+    ):
+        raise PermissionDenied(
+            "You cannot remove yourself from the property."
+        )
+    # Never remove the final active owner.
+    if (
+        target_membership.role
+        == PropertyMembership.Role.OWNER
+    ):
+        owner_count = (
+            PropertyMembership.objects
+            .filter(
+                property=property_obj,
+                role=PropertyMembership.Role.OWNER,
+                is_active=True,
+            )
+            .count()
+        )
+        if owner_count <= 1:
+            raise PermissionDenied(
+                "The final property owner cannot be removed."
+            )
     if request.method == "POST":
-        membership.is_active = False
-        membership.save(
+        target_membership.is_active = False
+        target_membership.save(
             update_fields=[
                 "is_active",
             ]
@@ -960,7 +1113,7 @@ def team_member_remove(
         messages.success(
             request,
             (
-                f"{membership.user.get_username()} "
+                f"{target_membership.user.get_username()} "
                 "has been removed from this property."
             ),
         )

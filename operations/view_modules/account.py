@@ -84,6 +84,17 @@ def organisation_account(
             organisation_slug,
         )
     )
+    can_manage_organisation = (
+        request.user.is_superuser
+        or (
+            membership
+            and membership.role
+            in {
+                OrganisationMembership.Role.OWNER,
+                OrganisationMembership.Role.ADMIN,
+            }
+        )
+    )
     onboarding_progress = (
         get_organisation_onboarding_progress(
             organisation
@@ -156,31 +167,37 @@ def organisation_account(
             .order_by("-created_at")
             .first()
         )
-    billing_events_queryset = (
-        OrganisationBillingEvent.objects
-        .filter(
-            organisation=organisation
+    billing_event_count = 0
+    billing_events = []
+    if can_manage_organisation:
+        billing_events_queryset = (
+            OrganisationBillingEvent.objects
+            .filter(
+                organisation=organisation
+            )
+            .order_by("-created_at")
         )
-        .order_by("-created_at")
-    )
-    billing_event_count = (
-        billing_events_queryset.count()
-    )
-    billing_events = (
-        billing_events_queryset[:5]
-    )
-    subscription_events = (
-        organisation.subscription_events
-        .select_related(
-            "changed_by",
+        billing_event_count = (
+            billing_events_queryset.count()
         )
-        .order_by(
-            "-created_at",
-        )[:5]
-    )
-    subscription_event_count = (
-        organisation.subscription_events.count()
-    )
+        billing_events = (
+            billing_events_queryset[:5]
+        )
+    subscription_events = []
+    subscription_event_count = 0
+    if can_manage_organisation:
+        subscription_events = (
+            organisation.subscription_events
+            .select_related(
+                "changed_by",
+            )
+            .order_by(
+                "-created_at",
+            )[:5]
+        )
+        subscription_event_count = (
+            organisation.subscription_events.count()
+        )
     pending_invitations = (
         OrganisationInvitation.objects
         .filter(
@@ -256,19 +273,25 @@ def organisation_account(
         )
         .count()
     )
-    pending_invitation_queryset = (
-        OrganisationInvitation.objects
-        .filter(
-            organisation=organisation,
-            is_active=True,
-            accepted_at__isnull=True,
-            revoked_at__isnull=True,
+    pending_invitations = []
+    pending_invitation_count = 0
+    if can_manage_organisation:
+        pending_invitation_queryset = (
+            OrganisationInvitation.objects
+            .filter(
+                organisation=organisation,
+                is_active=True,
+                accepted_at__isnull=True,
+                revoked_at__isnull=True,
+            )
+            .order_by("-created_at")
         )
-        .order_by("-created_at")
-    )
-    pending_invitation_count = (
-        pending_invitation_queryset.count()
-    )
+        pending_invitation_count = (
+            pending_invitation_queryset.count()
+        )
+        pending_invitations = (
+            pending_invitation_queryset[:5]
+        )
     allocated_member_count = (
         active_member_count
         + pending_invitation_count
@@ -315,13 +338,9 @@ def organisation_account(
         property_usage_percent,
         100,
     )
-
     member_usage_width = min(
         member_usage_percent,
         100,
-    )
-    pending_invitations = (
-        pending_invitation_queryset[:5]
     )
     current_property = properties.first()
     context = {
@@ -364,6 +383,7 @@ def organisation_account(
         "trial_monthly_price": trial_monthly_price,
         "billing_events": billing_events,
         "billing_event_count": billing_event_count,
+        "can_manage_organisation": can_manage_organisation,
     }
     return render(
         request,
