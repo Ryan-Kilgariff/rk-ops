@@ -209,9 +209,42 @@ def organisation_account(
     )
     properties = (
         organisation.properties
-        .filter(is_active=True)
-        .order_by("name")
+        .filter(
+            is_active=True,
+        )
+        .order_by(
+            "name"
+        )
     )
+    if (
+        not request.user.is_superuser
+        and not can_manage_organisation
+    ):
+        properties = (
+            properties
+            .filter(
+                memberships__user=request.user,
+                memberships__is_active=True,
+            )
+            .distinct()
+        )
+    property_rows = []
+    for property_obj in properties:
+        user_membership = (
+            PropertyMembership.objects
+            .filter(
+                property=property_obj,
+                user=request.user,
+                is_active=True,
+            )
+            .first()
+        )
+        property_rows.append(
+            {
+                "property": property_obj,
+                "membership": user_membership,
+            }
+        )
     organisation_memberships = (
         OrganisationMembership.objects
         .filter(
@@ -342,7 +375,30 @@ def organisation_account(
         member_usage_percent,
         100,
     )
-    current_property = properties.first()
+    if request.user.is_superuser:
+        current_property = properties.first()
+    else:
+        current_property_membership = (
+            PropertyMembership.objects
+            .filter(
+                user=request.user,
+                is_active=True,
+                property__organisation=organisation,
+                property__is_active=True,
+            )
+            .select_related(
+                "property",
+            )
+            .order_by(
+                "property__name",
+            )
+            .first()
+        )
+        current_property = (
+            current_property_membership.property
+            if current_property_membership
+            else None
+        )
     context = {
         "organisation": organisation,
         "organisation_membership": membership,
@@ -384,6 +440,7 @@ def organisation_account(
         "billing_events": billing_events,
         "billing_event_count": billing_event_count,
         "can_manage_organisation": can_manage_organisation,
+        "property_rows": property_rows,
     }
     return render(
         request,

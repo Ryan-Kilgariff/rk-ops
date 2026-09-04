@@ -101,7 +101,7 @@ Account
     </article>
     <article class="account-stat-card">
         <div class="account-stat-label">
-            Your Role
+            Organisation Role
         </div>
         <div class="account-stat-text">
             {% if request.user.is_superuser %}
@@ -241,27 +241,51 @@ Account
         {% endif %}
     </div>
 <div class="account-list">
-    {% for property_item in organisation_properties %}
-        {% if subscription %}
-            {% if subscription.status == "suspended" or subscription.status == "cancelled" %}
-                <div class="account-list-item account-list-item-disabled">
-                    <div>
-                        <strong>
-                            {{ property_item.name }}
-                        </strong>
-                        <div class="task-meta">
-                            {% if property_item.town_city %}
-                                {{ property_item.town_city }}
-                            {% endif %}
-                            {% if property_item.postcode %}
-                                · {{ property_item.postcode }}
-                            {% endif %}
+    {% for row in property_rows %}
+        {% with property_item=row.property %}
+            {% if subscription %}
+                {% if subscription.status == "suspended" or subscription.status == "cancelled" %}
+                    <div class="account-list-item account-list-item-disabled">
+                        <div>
+                            <strong>
+                                {{ property_item.name }}
+                            </strong>
+                            <div class="task-meta">
+                                {% if row.membership %}
+                                    {{ row.membership.get_role_display }}
+                                {% endif %}
+                            </div>
                         </div>
+                        <span class="account-property-locked">
+                            Access unavailable
+                        </span>
                     </div>
-                    <span class="account-property-locked">
-                        Access unavailable
-                    </span>
-                </div>
+                {% else %}
+                    <a
+                        href="{% url 'operations:dashboard' property_item.slug %}"
+                        class="account-list-item"
+                    >
+                        <div>
+                            <strong>
+                                {{ property_item.name }}
+                            </strong>
+                            <div class="task-meta">
+                                {% if row.membership %}
+                                    {{ row.membership.get_role_display }}
+                                {% endif %}
+                                {% if property_item.town_city %}
+                                    · {{ property_item.town_city }}
+                                {% endif %}
+                                {% if property_item.postcode %}
+                                    · {{ property_item.postcode }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <span class="account-arrow">
+                            →
+                        </span>
+                    </a>
+                {% endif %}
             {% else %}
                 <a
                     href="{% url 'operations:dashboard' property_item.slug %}"
@@ -272,8 +296,11 @@ Account
                             {{ property_item.name }}
                         </strong>
                         <div class="task-meta">
+                            {% if row.membership %}
+                                {{ row.membership.get_role_display }}
+                            {% endif %}
                             {% if property_item.town_city %}
-                                {{ property_item.town_city }}
+                                · {{ property_item.town_city }}
                             {% endif %}
                             {% if property_item.postcode %}
                                 · {{ property_item.postcode }}
@@ -285,29 +312,7 @@ Account
                     </span>
                 </a>
             {% endif %}
-        {% else %}
-            <a
-                href="{% url 'operations:dashboard' property_item.slug %}"
-                class="account-list-item"
-            >
-                <div>
-                    <strong>
-                        {{ property_item.name }}
-                    </strong>
-                    <div class="task-meta">
-                        {% if property_item.town_city %}
-                            {{ property_item.town_city }}
-                        {% endif %}
-                        {% if property_item.postcode %}
-                            · {{ property_item.postcode }}
-                        {% endif %}
-                    </div>
-                </div>
-                <span class="account-arrow">
-                    →
-                </span>
-            </a>
-        {% endif %}
+        {% endwith %}
     {% empty %}
         <div class="empty-state">
             No active properties.
@@ -773,54 +778,45 @@ Account
             {% endif %}
         {% endif %}
     {% endif %}
-        {% if subscription %}
-            {% if can_manage_organisation %}
-                <div class="subscription-actions">
-                    {% if subscription %}
-                        {% if can_manage_organisation %}
-                            <div class="subscription-actions">
-                                {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
-                                    <form
-                                        method="post"
-                                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
-                                    >
-                                        {% csrf_token %}
-                                        <button
-                                            type="submit"
-                                            class="button"
-                                        >
-                                            Reactivate Subscription
-                                        </button>
-                                    </form>
-                                {% elif subscription.status == "active" and subscription.cancelled_at %}
-                                    <form
-                                        method="post"
-                                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
-                                    >
-                                        {% csrf_token %}
-                                        <button
-                                            type="submit"
-                                            class="button"
-                                        >
-                                            Resume Subscription
-                                        </button>
-                                    </form>
-                                {% else %}
-                                    <a
-                                        href="{% url 'operations:organisation_subscription_cancel_confirm' organisation.slug %}"
-                                        class="button danger-action"
-                                    >
-                                        Cancel Subscription
-                                    </a>
-                                {% endif %}
-                            </div>
-                        {% endif %}
-                    {% endif %}
-                </div>
-            {% endif %}
+        {% if subscription and can_manage_organisation %}
+            <div class="subscription-actions">
+                {% if subscription.status == "cancelled" or subscription.status == "suspended" %}
+                    <form
+                        method="post"
+                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="button"
+                        >
+                            Reactivate Subscription
+                        </button>
+                    </form>
+                {% elif subscription.status == "active" and subscription.cancelled_at %}
+                    <form
+                        method="post"
+                        action="{% url 'operations:organisation_subscription_reactivate' organisation.slug %}"
+                    >
+                        {% csrf_token %}
+                        <button
+                            type="submit"
+                            class="button"
+                        >
+                            Resume Subscription
+                        </button>
+                    </form>
+                {% else %}
+                    <a
+                        href="{% url 'operations:organisation_subscription_cancel_confirm' organisation.slug %}"
+                        class="button danger-action"
+                    >
+                        Cancel Subscription
+                    </a>
+                {% endif %}
+            </div>
         {% endif %}
     </section>
-{% if can_manage_organisation %}
     {% if subscription_events %}
         <section class="section">
             <div class="section-header">
@@ -882,61 +878,62 @@ Account
                     </a>
                 </div>
             {% endif %}
-            {% if billing_events %}
-                <section class="section">
-                    <div class="section-header">
+        </section>
+    {% endif %}
+    {% if billing_events %}
+        <section class="section">
+            <div class="section-header">
+                <div>
+                    <h2 class="section-title">
+                        Billing History
+                    </h2>
+                    <div class="task-meta">
+                        Recent billing and payment activity
+                    </div>
+                </div>
+            </div>
+            <div class="account-list">
+                {% for event in billing_events %}
+                    <div class="account-list-item">
                         <div>
-                            <h2 class="section-title">
-                                Billing History
-                            </h2>
+                            <strong>
+                                {{ event.get_event_type_display }}
+                            </strong>
                             <div class="task-meta">
-                                Recent billing and payment activity
+                                {% if event.amount %}
+                                    £{{ event.amount }}
+                                    {{ event.currency }}
+                                    ·
+                                {% endif %}
+                                {{ event.created_at|date:"d M Y · H:i" }}
                             </div>
+                            {% if event.description %}
+                                <div class="task-meta">
+                                    {{ event.description }}
+                                </div>
+                            {% endif %}
+                            {% if event.provider_reference %}
+                                <div class="task-meta">
+                                    Ref: {{ event.provider_reference }}
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
-                    <div class="account-list">
-                        {% for event in billing_events %}
-                            <div class="account-list-item">
-                                <div>
-                                    <strong>
-                                        {{ event.get_event_type_display }}
-                                    </strong>
-                                    <div class="task-meta">
-                                        {% if event.amount %}
-                                            £{{ event.amount }}
-                                            {{ event.currency }}
-                                            ·
-                                        {% endif %}
-                                        {{ event.created_at|date:"d M Y · H:i" }}
-                                    </div>
-                                    {% if event.description %}
-                                        <div class="task-meta">
-                                            {{ event.description }}
-                                        </div>
-                                    {% endif %}
-                                    {% if event.provider_reference %}
-                                        <div class="task-meta">
-                                            Ref: {{ event.provider_reference }}
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                </section>
-                {% if billing_event_count > 5 %}
-                    <div class="history-footer">
-                        <a
-                            href="{% url 'operations:billing_history' organisation.slug %}"
-                            class="button secondary-action"
-                        >
-                            View Full Billing History
-                        </a>
-                    </div>
-                {% endif %}
+                {% endfor %}
+            </div>
+            {% if billing_event_count > 5 %}
+                <div class="history-footer">
+                    <a
+                        href="{% url 'operations:billing_history' organisation.slug %}"
+                        class="button secondary-action"
+                    >
+                        View Full Billing History
+                    </a>
+                </div>
             {% endif %}
-        {% endif %}
-    {% if request.user.is_superuser and subscription %}
+        </section>
+    {% endif %}
+{% if request.user.is_superuser and subscription %}
     <section class="account-section billing-diagnostics">
         <div class="account-section-heading">
             <div>
@@ -1023,574 +1020,5 @@ Account
             </div>
         </div>
     </section>
-    {% endif %}
 {% endif %}
-</section>
-{% endblock %}
-{% block extra_css %}
-<style>
-.account-stats {
-    display: grid;
-    grid-template-columns:
-        repeat(4, minmax(0, 1fr));
-    gap: 16px;
-    margin-top: 26px;
-}
-.account-stat-card {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 20px;
-}
-.account-stat-label {
-    color: #6b7280;
-    font-size: 12px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.history-footer {
-    display: flex;
-    justify-content: flex-end;
-
-    margin-top: 14px;
-}
-.account-stat-value {
-    margin-top: 8px;
-    font-size: 30px;
-    font-weight: 700;
-}
-.account-stat-text {
-    margin-top: 9px;
-    font-size: 18px;
-    font-weight: 700;
-}
-.account-list {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    overflow: hidden;
-}
-.account-list-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    padding: 16px 18px;
-    border-top: 1px solid #f3f4f6;
-    color: #111827;
-    text-decoration: none;
-}
-.account-list-item:first-child {
-    border-top: 0;
-}
-a.account-list-item:hover {
-    background: #f9fafb;
-}
-.account-arrow {
-    color: #6b7280;
-    font-size: 20px;
-}
-.account-role {
-    padding: 5px 9px;
-    background: #f3f4f6;
-    border-radius: 999px;
-    color: #4b5563;
-    font-size: 12px;
-    font-weight: 700;
-}
-.subscription-card {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 24px;
-    padding: 20px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-}
-.subscription-plan {
-    margin: 7px 0 3px;
-    font-size: 22px;
-    font-weight: 700;
-}
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    background: #ecfdf5;
-    color: #047857;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 800;
-}
-@media (max-width: 1000px) {
-    .account-stats {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
-}
-@media (max-width: 650px) {
-    .account-stats {
-        grid-template-columns: 1fr;
-    }
-    .subscription-card {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-}
-.invitation-actions-inline {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-.invitation-actions-inline form {
-    margin: 0;
-}
-.invitation-status {
-    display: inline-flex;
-    align-items: center;
-    padding: 5px 9px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
-}
-.invitation-status.pending {
-    background: #eff6ff;
-    color: #1d4ed8;
-}
-.invitation-status.expired {
-    background: #fef2f2;
-    color: #b91c1c;
-}
-.danger-action {
-    background: #fef2f2;
-    color: #b91c1c;
-    border: 1px solid #fecaca;
-}
-.danger-action:hover {
-    background: #fee2e2;
-}
-.subscription-status {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 800;
-}
-.subscription-status-active {
-    background: #ecfdf5;
-    color: #047857;
-}
-.subscription-status-trial {
-    background: #eff6ff;
-    color: #1d4ed8;
-}
-.subscription-status-past_due {
-    background: #fff7ed;
-    color: #c2410c;
-}
-.subscription-status-cancelled,
-.subscription-status-suspended {
-    background: #fef2f2;
-    color: #b91c1c;
-}
-.subscription-alert {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    margin-bottom: 14px;
-    padding: 16px 18px;
-    border-radius: 12px;
-    border: 1px solid;
-}
-.subscription-alert-warning {
-    background: #fff7ed;
-    border-color: #fed7aa;
-    color: #9a3412;
-}
-.subscription-alert-danger {
-    background: #fef2f2;
-    border-color: #fecaca;
-    color: #991b1b;
-}
-.subscription-alert-info {
-    background: #eff6ff;
-    border-color: #bfdbfe;
-    color: #1e40af;
-}
-.subscription-alert .task-meta {
-    margin-top: 4px;
-    color: inherit;
-    opacity: 0.85;
-}
-.account-list-item-disabled {
-    background: #f9fafb;
-    cursor: default;
-}
-.account-property-locked {
-    color: #b91c1c;
-    font-size: 12px;
-    font-weight: 700;
-}
-.subscription-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-    margin-top: 14px;
-}
-.subscription-actions form {
-    margin: 0;
-}
-.plan-usage-card {
-    margin-top: 16px;
-    padding: 20px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-}
-.plan-usage-header {
-    margin-bottom: 20px;
-}
-.plan-usage-header h3 {
-    margin: 0 0 4px;
-    font-size: 16px;
-}
-.usage-item {
-    margin-top: 18px;
-}
-.usage-item:first-of-type {
-    margin-top: 0;
-}
-.usage-item-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    margin-bottom: 7px;
-    font-size: 13px;
-}
-.usage-track {
-    width: 100%;
-    height: 8px;
-    overflow: hidden;
-    background: #e5e7eb;
-    border-radius: 999px;
-}
-.usage-bar {
-    height: 100%;
-    background: #111827;
-    border-radius: inherit;
-}
-.usage-warning {
-    margin-top: 7px;
-    color: #b91c1c;
-    font-size: 12px;
-    font-weight: 700;
-}
-.limit-reached-label {
-    padding: 6px 10px;
-    background: #f3f4f6;
-    border-radius: 8px;
-    color: #6b7280;
-    font-size: 12px;
-    font-weight: 700;
-}
-.plan-selector-card {
-    margin-top: 16px;
-    padding: 20px;
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-}
-.plan-selector-header {
-    margin-bottom: 18px;
-}
-.plan-selector-header h3 {
-    margin: 0 0 4px;
-    font-size: 16px;
-}
-.plan-option-current {
-    background: #f9fafb;
-    border-color: #d1d5db;
-}
-.current-plan-label {
-    display: inline-flex;
-    padding: 5px 9px;
-    background: #ecfdf5;
-    border-radius: 999px;
-    color: #047857;
-    font-size: 11px;
-    font-weight: 800;
-}
-.plan-option-main {
-    min-width: 0;
-}
-.plan-option-heading {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 16px;
-}
-.section-header-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 20px;
-}
-.member-usage-summary {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    white-space: nowrap;
-}
-.member-usage-summary strong {
-    font-size: 14px;
-}
-.member-usage-summary span {
-    color: #6b7280;
-    font-size: 13px;
-}
-@media (max-width: 750px) {
-    .section-header-actions {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 10px;
-    }
-}
-.plan-option {
-    display: grid;
-    gap: 20px;
-    padding: 24px;
-    border: 1px solid #e5e7eb;
-    border-radius: 14px;
-}
-.plan-option-name {
-    margin-bottom: 6px;
-    font-size: 18px;
-    font-weight: 800;
-}
-.plan-price {
-    margin-top: 8px;
-    margin-bottom: 6px;
-    font-size: 28px;
-    font-weight: 800;
-}
-.plan-price span {
-    font-size: 13px;
-}
-.plan-feature-list {
-    display: grid;
-    gap: 8px;
-    margin-top: 18px;
-    margin-bottom: 4px;
-}
-.plan-feature {
-    font-size: 13px;
-    line-height: 1.4;
-}
-.plan-billing {
-    margin-top: 10px;
-}
-.plan-option form,
-.plan-option > a {
-    margin-top: 4px;
-}
-.plan-option .button {
-    width: fit-content;
-    min-width: 180px;
-}
-.billing-diagnostics {
-    margin-top: 2rem;
-}
-.billing-diagnostics-grid {
-    display: grid;
-    grid-template-columns:
-        repeat(
-            auto-fit,
-            minmax(220px, 1fr)
-        );
-    gap: 1rem;
-    margin-top: 1rem;
-}
-.billing-diagnostic-item {
-    padding: 1rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    background: #fff;
-}
-.billing-diagnostic-item span {
-    display: block;
-    margin-bottom: 0.35rem;
-    font-size: 0.8rem;
-    color: #6b7280;
-}
-.billing-diagnostic-item strong {
-    display: block;
-    overflow-wrap: anywhere;
-}
-.onboarding-card {
-    margin-bottom: 2rem;
-}
-.onboarding-progress-summary {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: #4b5563;
-}
-.onboarding-progress-track {
-    width: 100%;
-    height: 8px;
-    margin-top: 1rem;
-    overflow: hidden;
-    border-radius: 999px;
-    background: #e5e7eb;
-}
-.onboarding-progress-fill {
-    height: 100%;
-    border-radius: inherit;
-    background: #111827;
-}
-.onboarding-steps {
-    display: grid;
-    gap: 0.75rem;
-    margin-top: 1.25rem;
-}
-.onboarding-step {
-    display: flex;
-    align-items: center;
-    gap: 0.8rem;
-    padding: 0.9rem 1rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    background: #fff;
-}
-.onboarding-step-status {
-    display: flex;
-    width: 28px;
-    height: 28px;
-    flex: 0 0 28px;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: #f3f4f6;
-    font-weight: 700;
-}
-.onboarding-step.is-complete {
-    opacity: 0.7;
-}
-.onboarding-step.is-complete
-.onboarding-step-status {
-    background: #dcfce7;
-}
-.onboarding-step-action {
-    margin-left: auto;
-    padding: 0.55rem 0.8rem;
-    border-radius: 8px;
-    text-decoration: none;
-    font-size: 0.85rem;
-    font-weight: 600;
-    background: #111827;
-    color: #fff;
-}
-.subscription-trial-summary {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    margin-top: 1rem;
-    padding: 1rem;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    background: #fff;
-}
-.subscription-trial-summary p {
-    margin: 0.25rem 0 0;
-    color: #6b7280;
-}
-.trial-days {
-    font-weight: 700;
-    white-space: nowrap;
-}
-.subscription-trial-note {
-    margin-top: 0.75rem;
-    color: #4b5563;
-}
-.trial-banner {
-    width: 100%;
-    margin-top: 1.5rem;
-    padding: 1.5rem 1.75rem;
-    border: 1px solid #dfe3e8;
-    border-radius: 16px;
-    background: #fff;
-    box-sizing: border-box;
-}
-.trial-banner-main {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2rem;
-}
-.trial-banner-main > div {
-    flex: 1;
-    min-width: 0;
-}
-.trial-banner-label {
-    margin: 0 0 0.35rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: #64748b;
-}
-.trial-banner h3 {
-    margin: 0;
-    font-size: 1.8rem;
-    line-height: 1.15;
-}
-.trial-banner-main p {
-    margin: 0.45rem 0 0;
-    color: #64748b;
-}
-.trial-banner .btn {
-    flex: 0 0 auto;
-    white-space: nowrap;
-}
-.trial-banner-note {
-    margin: 1.25rem 0 0;
-    padding-top: 1rem;
-    border-top: 1px solid #e5e7eb;
-    color: #475569;
-}
-@media (max-width: 700px) {
-    .trial-banner-main {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    .trial-banner .btn {
-        width: 100%;
-        text-align: center;
-    }
-}
-.trial-banner-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: stretch;
-    min-width: 170px;
-}
-.trial-banner-actions form {
-    width: 100%;
-    margin: 0;
-}
-.trial-banner-actions .button {
-    width: 100%;
-    justify-content: center;
-    box-sizing: border-box;
-}
-</style>
 {% endblock %}

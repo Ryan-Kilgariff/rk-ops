@@ -81,6 +81,18 @@ class Task(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     class Meta:
         ordering = ["due_at", "-priority", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "recurring_source",
+                    "scheduled_date",
+                ],
+                condition=models.Q(
+                    recurring_source__isnull=False,
+                ),
+                name="unique_recurring_task_per_date",
+            ),
+        ]
     def __str__(self):
         return self.title
 class Issue(models.Model):

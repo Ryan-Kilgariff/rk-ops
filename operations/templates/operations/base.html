@@ -111,105 +111,129 @@
     </aside>
     <div class="main">
         <header class="topbar">
-            <div class="topbar-title">
-                {% block topbar_title %}
-                    Operations
-                {% endblock %}
-            </div>
-            {% if property %}
-                <details class="notification-menu">
-                    <summary
-                        class="notification-link"
-                        aria-label="Notifications"
-                    >
-                        <span class="notification-icon">
-                            🔔
-                        </span>
-                        {% if unread_notification_count > 0 %}
-                            <span class="notification-badge">
-                                {{ unread_notification_count }}
-                            </span>
-                        {% endif %}
-                    </summary>
-                    <div class="notification-dropdown">
-                        <div class="notification-dropdown-header">
-                            <strong>
-                                Notifications
-                            </strong>
-                            {% if unread_notification_count > 0 %}
-                                <span>
-                                    {{ unread_notification_count }} unread
+            <div class="topbar-inner">
+                <div class="topbar-title">
+                    {% block topbar_title %}
+                        Operations
+                    {% endblock %}
+                </div>
+                <div class="topbar-centre">
+                    {% if property %}
+                        <details class="notification-menu">
+                            <summary
+                                class="notification-link"
+                                aria-label="Notifications"
+                            >
+                                <span class="notification-icon">
+                                    <svg
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                    >
+                                        <path
+                                            d="
+                                                M18 8
+                                                A6 6 0 0 0 6 8
+                                                C6 15 3 16 3 16
+                                                H21
+                                                C21 16 18 15 18 8
+                                                Z
+                                            "
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="1.8"
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                        />
+                                        <path
+                                            d="M10 20H14"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            stroke-width="1.8"
+                                            stroke-linecap="round"
+                                        />
+                                    </svg>
                                 </span>
-                            {% endif %}
-                        </div>
-                        <div class="notification-dropdown-list">
-                            {% for notification in recent_notifications %}
-                                <a
-                                    href="{% url 'operations:notification_open' property.slug notification.pk %}"
-                                    class="
-                                        notification-dropdown-item
-                                        {% if not notification.is_read %}
-                                            unread
-                                        {% endif %}
-                                    "
-                                >
-                                    <div class="notification-dropdown-title">
-                                        {{ notification.title }}
-                                    </div>
-                                    {% if notification.message %}
-                                        <div class="notification-dropdown-message">
-                                            {{ notification.message }}
-                                        </div>
+                                {% if unread_notification_count > 0 %}
+                                    <span class="notification-badge">
+                                        {{ unread_notification_count }}
+                                    </span>
+                                {% endif %}
+                            </summary>
+                            <div class="notification-dropdown">
+                                <div class="notification-dropdown-header">
+                                    <strong>
+                                        Notifications
+                                    </strong>
+                                    {% if unread_notification_count > 0 %}
+                                        <span>
+                                            {{ unread_notification_count }} unread
+                                        </span>
                                     {% endif %}
-                                    <div class="notification-dropdown-time">
-                                        {{ notification.created_at|timesince }}
-                                        ago
-                                    </div>
-                                </a>
-                            {% empty %}
-                                <div class="notification-dropdown-empty">
-                                    No notifications.
                                 </div>
-                            {% endfor %}
-                        </div>
+                                <div class="notification-dropdown-list">
+                                    {% for notification in recent_notifications %}
+                                        <a
+                                            href="{% url 'operations:notification_open' property.slug notification.pk %}"
+                                            class="
+                                                notification-dropdown-item
+                                                {% if not notification.is_read %}
+                                                    unread
+                                                {% endif %}
+                                            "
+                                        >
+                                            <div class="notification-dropdown-title">
+                                                {{ notification.title }}
+                                            </div>
+                                            {% if notification.message %}
+                                                <div class="notification-dropdown-message">
+                                                    {{ notification.message }}
+                                                </div>
+                                            {% endif %}
+                                            <div class="notification-dropdown-time">
+                                                {{ notification.created_at|timesince }}
+                                                ago
+                                            </div>
+                                        </a>
+                                    {% empty %}
+                                        <div class="notification-dropdown-empty">
+                                            No notifications.
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                                <a
+                                    href="{% url 'operations:notification_list' property.slug %}"
+                                    class="notification-dropdown-footer"
+                                >
+                                    View all notifications
+                                </a>
+                            </div>
+                        </details>
+                    {% endif %}
+                </div>
+                <div class="user-area">
+                    {% if request.user.is_authenticated %}
                         <a
-                            href="{% url 'operations:notification_list' property.slug %}"
-                            class="notification-dropdown-footer"
+                            href="{% url 'operations:profile' %}"
+                            class="user-profile-link"
                         >
-                            View all notifications
+                            {{ request.user.get_full_name|default:request.user.username }}
                         </a>
-                    </div>
-                </details>
-            {% endif %}
-            <div class="user-area">
-                {% if request.user.is_authenticated %}
-                    <a
-                        href="{% url 'operations:profile' %}"
-                        class="user-profile-link"
-                    >
-                        {{ request.user.get_full_name|default:request.user.username }}
-                    -
-                    </a>
-                    <form
-                        method="post"
-                        action="{% url 'logout' %}"
-                        style="display: inline;"
-                    >
-                        {% csrf_token %}
-                        <button
-                            type="submit"
-                            style="
-                                border: 0;
-                                background: none;
-                                padding: 0;
-                                color: #6b7280;
-                                cursor: pointer;
-                            "
+                        <form
+                            method="post"
+                            action="{% url 'logout' %}"
+                            class="logout-form"
                         >
-                            Logout
-                        </button>
-                    </form>
-                {% endif %}
+                            {% csrf_token %}
+                            <button
+                                type="submit"
+                                class="logout-button"
+                            >
+                                Logout
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
             </div>
         </header>
         <main class="content">

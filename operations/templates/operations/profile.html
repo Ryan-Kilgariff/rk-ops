@@ -15,14 +15,6 @@ My Profile
 <p class="page-subtitle">
     Manage your personal RK Ops account details.
 </p>
-{% if property %}
-    <a
-        href="{% url 'operations:dashboard' property.slug %}"
-        class="button secondary-action"
-    >
-        ← Back to Dashboard
-    </a>
-{% endif %}
 <section class="section">
     <div class="section-header">
         <div>
@@ -40,7 +32,7 @@ My Profile
     >
         {% csrf_token %}
         <div class="form-group">
-            <label>
+            <label for="{{ form.username.id_for_label }}">
                 Username
             </label>
             {{ form.username }}
@@ -95,9 +87,9 @@ My Profile
             </div>
         </div>
     </div>
-    <div class="account-list">
+    <div class="profile-card">
         {% for membership in property_memberships %}
-            <div class="account-list-item">
+            <div class="profile-access-item">
                 <div>
                     <strong>
                         {{ membership.property.name }}
@@ -131,11 +123,23 @@ My Profile
             </div>
         </div>
     </div>
-    <a
-        href="{% url 'operations:profile_password_change' %}"
-        class="button secondary-action"
-    >
-        Change Password
-    </a>
+    <div class="profile-card">
+        <div class="profile-security-row">
+            <div>
+                <strong>
+                    Password
+                </strong>
+                <div class="task-meta">
+                    Change the password used to sign in to RK Ops.
+                </div>
+            </div>
+            <a
+                href="{% url 'operations:profile_password_change' %}"
+                class="button secondary-action"
+            >
+                Change Password
+            </a>
+        </div>
+    </div>
 </section>
 {% endblock %}

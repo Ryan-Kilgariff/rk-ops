@@ -2,10 +2,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link
-        rel="stylesheet"
-        href="{% static 'operations/css/operations.css' %}"
-    >
     <meta charset="UTF-8">
     <meta
         name="viewport"
@@ -16,19 +12,14 @@
             RK Ops
         {% endblock %}
     </title>
-    {# Keep your existing global stylesheet if you have one #}
+    <link
+        rel="stylesheet"
+        href="{% static 'operations/css/operations.css' %}"
+    >
     {% block extra_css %}
     {% endblock %}
 </head>
 <body class="onboarding-body">
-    <header class="onboarding-topbar">
-        <a
-            href="/"
-            class="onboarding-brand"
-        >
-            RK OPS
-        </a>
-    </header>
     {% if messages %}
         <div class="onboarding-messages">
             {% for message in messages %}

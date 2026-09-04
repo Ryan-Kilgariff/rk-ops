@@ -53,12 +53,6 @@ New Task
             </div>
         {% endfor %}
         <div class="form-actions">
-            <a
-                href="{% url 'operations:task_list' property.slug %}"
-                class="secondary-button"
-            >
-                Cancel
-            </a>
             <button
                 type="submit"
                 class="button"
@@ -69,76 +63,13 @@ New Task
                     Create Task
                 {% endif %}
             </button>
+             <a
+                href="{% url 'operations:task_list' property.slug %}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
         </div>
     </form>
 </section>
-{% endblock %}
-{% block extra_css %}
-<style>
-    .form-card {
-        max-width: 760px;
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 12px;
-        padding: 26px;
-    }
-    .form-group {
-        margin-bottom: 20px;
-    }
-    .form-group label {
-        display: block;
-        margin-bottom: 7px;
-        font-size: 14px;
-        font-weight: 700;
-    }
-    .form-control {
-        width: 100%;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        padding: 11px 12px;
-        font: inherit;
-        background: white;
-    }
-    textarea.form-control {
-        resize: vertical;
-    }
-    .form-control:focus {
-        outline: 2px solid #111827;
-        outline-offset: 1px;
-    }
-    .help-text {
-        margin-top: 5px;
-        color: #6b7280;
-        font-size: 13px;
-    }
-    .field-error {
-        margin-top: 5px;
-        color: #b91c1c;
-        font-size: 13px;
-    }
-    .form-errors {
-        margin-bottom: 20px;
-        padding: 12px;
-        border-radius: 8px;
-        background: #fef2f2;
-        color: #b91c1c;
-    }
-    .form-actions {
-        margin-top: 28px;
-        display: flex;
-        justify-content: flex-end;
-        gap: 12px;
-    }
-    .secondary-button {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        padding: 10px 15px;
-        border: 1px solid #d1d5db;
-        background: white;
-        font-size: 14px;
-        font-weight: 700;
-    }
-</style>
 {% endblock %}
