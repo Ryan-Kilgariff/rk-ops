@@ -868,16 +868,14 @@ Account
                     </div>
                 {% endfor %}
             </div>
-            {% if subscription_event_count > 5 %}
-                <div class="history-footer">
-                    <a
-                        href="{% url 'operations:subscription_history' organisation.slug %}"
-                        class="button secondary-action"
-                    >
-                        View Full History
-                    </a>
-                </div>
-            {% endif %}
+            <div class="history-footer">
+                <a
+                    href="{% url 'operations:subscription_history' organisation.slug %}"
+                    class="button secondary-action"
+                >
+                    View Full Subscription History
+                </a>
+            </div>
         </section>
     {% endif %}
     {% if billing_events %}
@@ -921,16 +919,14 @@ Account
                     </div>
                 {% endfor %}
             </div>
-            {% if billing_event_count > 5 %}
-                <div class="history-footer">
-                    <a
-                        href="{% url 'operations:billing_history' organisation.slug %}"
-                        class="button secondary-action"
-                    >
-                        View Full Billing History
-                    </a>
-                </div>
-            {% endif %}
+            <div class="history-footer">
+                <a
+                    href="{% url 'operations:billing_history' organisation.slug %}"
+                    class="button secondary-action"
+                >
+                    View Full Billing History
+                </a>
+            </div>
         </section>
     {% endif %}
 {% if request.user.is_superuser and subscription %}

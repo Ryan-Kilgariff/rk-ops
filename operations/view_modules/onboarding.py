@@ -37,6 +37,7 @@ def signup(request):
             login(
                 request,
                 user,
+                backend="accounts.backends.UsernameOrEmailBackend",
             )
             messages.success(
                 request,

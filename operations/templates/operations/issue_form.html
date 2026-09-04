@@ -29,6 +29,11 @@ RK Ops | Issue
         class="form-card"
     >
         {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
         {% for field in form %}
             <div class="form-group">
                 <label for="{{ field.id_for_label }}">
@@ -48,12 +53,6 @@ RK Ops | Issue
             </div>
         {% endfor %}
         <div class="form-actions">
-            <a
-                href="{% url 'operations:issue_list' property.slug %}"
-                class="secondary-button"
-            >
-                Cancel
-            </a>
             <button
                 type="submit"
                 class="button"
@@ -64,6 +63,12 @@ RK Ops | Issue
                     Report Issue
                 {% endif %}
             </button>
+            <a
+                href="{% url 'operations:issue_list' property.slug %}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
         </div>
     </form>
 </section>

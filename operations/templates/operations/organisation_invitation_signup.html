@@ -22,12 +22,18 @@ Join RK Ops
         class="form-card"
     >
         {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
         <div class="form-group">
-            <label>
+            <label for="invitation-email">
                 Email address
             </label>
             <input
                 type="email"
+                id="invitation-email"
                 class="form-control"
                 value="{{ invitation.email }}"
                 disabled
@@ -38,29 +44,50 @@ Join RK Ops
                 First name
             </label>
             {{ form.first_name }}
-            {{ form.first_name.errors }}
-        </div>
+            {% for error in form.first_name.errors %}
+                <div class="field-error">
+                    {{ error }}
+                </div>
+            {% endfor %}
+            </div>
         <div class="form-group">
             <label for="{{ form.last_name.id_for_label }}">
                 Last name
             </label>
             {{ form.last_name }}
-            {{ form.last_name.errors }}
+            {% for error in form.last_name.errors %}
+                <div class="field-error">
+                    {{ error }}
+                </div>
+            {% endfor %}
         </div>
         <div class="form-group">
             <label for="{{ form.password1.id_for_label }}">
                 Password
             </label>
             {{ form.password1 }}
-            {{ form.password1.errors }}
+            {% for error in form.password1.errors %}
+                <div class="field-error">
+                    {{ error }}
+                </div>
+            {% endfor %}
         </div>
         <div class="form-group">
             <label for="{{ form.password2.id_for_label }}">
                 Confirm password
             </label>
             {{ form.password2 }}
-            {{ form.password2.errors }}
+            {% for error in form.password2.errors %}
+                <div class="field-error">
+                    {{ error }}
+                </div>
+            {% endfor %}
         </div>
+        {% if form.password1.help_text %}
+            <div class="help-text">
+                {{ form.password1.help_text|safe }}
+            </div>
+        {% endif %}
         <div class="form-actions">
             <button
                 type="submit"

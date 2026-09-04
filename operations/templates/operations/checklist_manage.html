@@ -40,7 +40,17 @@ Checklist Templates
                     {% endif %}
                     <div class="task-meta">
                         {{ checklist.items.count }} items
-                        ·
+                    </div>
+                    <div
+                        class="
+                            recurring-status
+                            {% if checklist.is_active %}
+                                status-active
+                            {% else %}
+                                status-inactive
+                            {% endif %}
+                        "
+                    >
                         {% if checklist.is_active %}
                             Active
                         {% else %}

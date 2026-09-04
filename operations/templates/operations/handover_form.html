@@ -21,12 +21,22 @@ New Handover Note
         class="form-card"
     >
         {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
         {% for field in form %}
             <div class="form-group">
                 <label for="{{ field.id_for_label }}">
                     {{ field.label }}
                 </label>
                 {{ field }}
+                {% if field.help_text %}
+                    <div class="help-text">
+                        {{ field.help_text }}
+                    </div>
+                {% endif %}
                 {% for error in field.errors %}
                     <div class="field-error">
                         {{ error }}
@@ -35,18 +45,18 @@ New Handover Note
             </div>
         {% endfor %}
         <div class="form-actions">
-            <a
-                href="{% url 'operations:handover_list' property.slug %}"
-                class="secondary-button"
-            >
-                Cancel
-            </a>
             <button
                 type="submit"
                 class="button"
             >
                 Add Note
             </button>
+            <a
+                href="{% url 'operations:handover_list' property.slug %}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
         </div>
     </form>
 </section>

@@ -51,5 +51,13 @@ Billing History
             </div>
         {% endfor %}
     </div>
+    <div class="subscription-history-actions">
+        <a
+            href="{% url 'operations:organisation_account' organisation.slug %}"
+            class="button secondary-action"
+        >
+            ← Back to Account
+        </a>
+    </div>
 </section>
 {% endblock %}

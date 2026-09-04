@@ -22,12 +22,22 @@ Checklist Item
         class="form-card"
     >
         {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
         {% for field in form %}
             <div class="form-group">
                 <label for="{{ field.id_for_label }}">
                     {{ field.label }}
                 </label>
                 {{ field }}
+                {% if field.help_text %}
+                    <div class="help-text">
+                        {{ field.help_text }}
+                    </div>
+                {% endif %}
                 {% for error in field.errors %}
                     <div class="field-error">
                         {{ error }}
@@ -36,18 +46,18 @@ Checklist Item
             </div>
         {% endfor %}
         <div class="form-actions">
-            <a
-                href="{% url 'operations:checklist_edit' property.slug checklist.pk %}"
-                class="secondary-button"
-            >
-                Cancel
-            </a>
             <button
                 type="submit"
                 class="button"
             >
                 Save Item
             </button>
+            <a
+                href="{% url 'operations:checklist_edit' property.slug checklist.pk %}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
         </div>
     </form>
 </section>

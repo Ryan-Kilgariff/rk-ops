@@ -65,6 +65,7 @@ Invitations
                     <form
                         method="post"
                         action="{% url 'operations:organisation_invitation_revoke' organisation.slug invitation.pk %}"
+                        onsubmit="return confirm('Revoke this invitation?');"
                     >
                         {% csrf_token %}
                         <button

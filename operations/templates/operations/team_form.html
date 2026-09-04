@@ -13,14 +13,14 @@ Team
     {% if form_mode == "edit" %}
         Edit team member
     {% else %}
-        Add team member
+        Invite team member
     {% endif %}
 </h1>
 <p class="page-subtitle">
     {% if form_mode == "edit" %}
         Update access for {{ membership.user.username }}.
     {% else %}
-        Create a staff account for {{ property.name }}.
+        Invite a team member to {{ property.name }}.
     {% endif %}
 </p>
 <section class="section">
@@ -53,12 +53,6 @@ Team
             </div>
         {% endfor %}
         <div class="form-actions">
-            <a
-                href="{% url 'operations:team_list' property.slug %}"
-                class="secondary-button"
-            >
-                Cancel
-            </a>
             <button
                 type="submit"
                 class="button"
@@ -69,6 +63,12 @@ Team
                     Add Team Member
                 {% endif %}
             </button>
+            <a
+                href="{% url 'operations:team_list' property.slug %}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
         </div>
     </form>
 </section>

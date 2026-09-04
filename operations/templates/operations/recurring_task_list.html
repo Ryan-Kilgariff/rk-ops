@@ -43,10 +43,28 @@ Recurring Tasks
     <div class="task-list">
         {% for recurring in recurring_tasks %}
             <article class="task-card">
-                <div>
-                    <h3 class="task-title">
-                        {{ recurring.title }}
-                    </h3>
+                <div class="task-main">
+                    <div class="task-heading">
+                        <h3 class="task-title">
+                            {{ recurring.title }}
+                        </h3>
+                        <span
+                            class="
+                                recurring-status
+                                {% if recurring.is_active %}
+                                    status-active
+                                {% else %}
+                                    status-inactive
+                                {% endif %}
+                            "
+                        >
+                            {% if recurring.is_active %}
+                                Active
+                            {% else %}
+                                Inactive
+                            {% endif %}
+                        </span>
+                    </div>
                     <div class="task-meta">
                         {{ recurring.get_frequency_display }}
                         · {{ recurring.get_category_display }}
@@ -62,21 +80,6 @@ Recurring Tasks
                             Last generated:
                             {{ recurring.last_generated_at|date:"d M Y · H:i" }}
                         </div>
-                        {% if recurring.last_generated_for %}
-                            <div class="task-meta">
-                                {{ recurring.get_category_display }}
-                                · {{ recurring.get_priority_display }}
-                            </div>
-                            <div class="task-meta">
-                                {% if recurring.frequency == "daily" %}
-                                    Daily
-                                {% elif recurring.frequency == "weekly" %}
-                                    Every {{ recurring.get_weekday_display }}
-                                {% endif %}
-                                {% if recurring.due_time %}
-                                    · Due {{ recurring.due_time|time:"H:i" }}
-                                {% endif %}
-                            </div>
                     {% else %}
                         <div class="task-meta automation-meta">
                             Not generated yet
@@ -84,22 +87,6 @@ Recurring Tasks
                     {% endif %}
                 </div>
                 <div class="recurring-actions">
-                    <span
-                        class="
-                            recurring-status
-                            {% if recurring.is_active %}
-                                status-active
-                            {% else %}
-                                status-inactive
-                            {% endif %}
-                        "
-                    >
-                        {% if recurring.is_active %}
-                            Active
-                        {% else %}
-                            Inactive
-                        {% endif %}
-                    </span>
                     <a
                         href="{% url 'operations:recurring_task_edit' property.slug recurring.pk %}"
                         class="action-button"
@@ -137,7 +124,7 @@ Recurring Tasks
                     </form>
                 </div>
             </article>
-        {% endif %}
+        {% empty %}
             <div class="empty-state">
                 No recurring tasks have been configured.
             </div>

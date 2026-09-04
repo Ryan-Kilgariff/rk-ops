@@ -25,6 +25,11 @@ Recurring Task
         class="form-card"
     >
         {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="form-errors">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
         {% for field in form %}
             <div class="form-group">
                 <label for="{{ field.id_for_label }}">
@@ -44,12 +49,6 @@ Recurring Task
             </div>
         {% endfor %}
         <div class="form-actions">
-            <a
-                href="{% url 'operations:recurring_task_list' property.slug %}"
-                class="secondary-button"
-            >
-                Cancel
-            </a>
             <button
                 type="submit"
                 class="button"
@@ -60,6 +59,12 @@ Recurring Task
                     Save Recurring Task
                 {% endif %}
             </button>
+            <a
+                href="{% url 'operations:recurring_task_list' property.slug %}"
+                class="secondary-button"
+            >
+                Cancel
+            </a>
         </div>
     </form>
 </section>
