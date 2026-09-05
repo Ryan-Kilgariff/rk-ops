@@ -1,5 +1,4 @@
 import requests
-import uuid
 from django.conf import settings
 from .base import BillingProviderAdapter
 from properties.models import (
@@ -84,48 +83,6 @@ class PayPalBillingAdapter(
             "Direct PayPal subscription "
             "creation is not implemented."
         )
-    def suspend_subscription(
-        self,
-        subscription,
-    ):
-        paypal_subscription_id = (
-            subscription.provider_subscription_id
-        )
-        if not paypal_subscription_id:
-            raise ValueError(
-                "PayPal subscription ID is missing."
-            )
-        response = requests.post(
-            (
-                f"{self.base_url}"
-                f"/v1/billing/subscriptions/"
-                f"{paypal_subscription_id}"
-                "/suspend"
-            ),
-            headers=self._headers(),
-            json={
-                "reason": (
-                    "RK Ops sandbox "
-                    "suspension test."
-                )
-            },
-            timeout=20,
-        )
-        if not response.ok:
-            print(
-                "PAYPAL SUSPEND ERROR:",
-                response.status_code,
-                response.text,
-            )
-        self._raise_for_paypal_error(
-            response
-        )
-        return {
-            "success": True,
-            "subscription_id": (
-                paypal_subscription_id
-            ),
-        }
     def cancel_subscription(
         self,
         subscription,
@@ -302,8 +259,9 @@ class PayPalBillingAdapter(
             ),
             headers={
                 **self._headers(),
-                "PayPal-Request-Id": str(
-                    uuid.uuid4()
+                "PayPal-Request-Id": (
+                    f"rkops-billing-session-"
+                    f"{billing_session.pk}"
                 ),
                 "Prefer": "return=representation",
             },
@@ -565,10 +523,10 @@ class PayPalBillingAdapter(
             headers=self._headers(),
             json={
                 "reason": (
-                    "RK Ops sandbox "
-                    "suspension test."
-                )
-            },
+                "Subscription suspended "
+                "from RK Ops."
+            )
+        },
             timeout=20,
         )
         self._raise_for_paypal_error(
@@ -576,6 +534,9 @@ class PayPalBillingAdapter(
         )
         return {
             "success": True,
+            "subscription_id": (
+                paypal_subscription_id
+            ),
         }
     def _raise_for_paypal_error(
         self,
@@ -751,6 +712,21 @@ class PayPalBillingAdapter(
                     new_plan
                 )
             )
+        app_base_url = (
+            settings.APP_BASE_URL.rstrip("/")
+        )
+        return_url = (
+            f"{app_base_url}"
+            f"/account/"
+            f"{subscription.organisation.slug}"
+            f"/billing/paypal/trial-plan-return/"
+        )
+        cancel_url = (
+            f"{app_base_url}"
+            f"/account/"
+            f"{subscription.organisation.slug}"
+            f"/"
+        )
         response = requests.post(
             (
                 f"{self.base_url}"
@@ -764,19 +740,11 @@ class PayPalBillingAdapter(
                 "application_context": {
                     "brand_name": "RK Ops",
                     "locale": "en-GB",
-                    "shipping_preference": "NO_SHIPPING",
-                    "return_url": (
-                        f"{settings.APP_BASE_URL}"
-                        f"/account/"
-                        f"{subscription.organisation.slug}"
-                        f"/billing/paypal/trial-plan-return/"
+                    "shipping_preference": (
+                        "NO_SHIPPING"
                     ),
-                    "cancel_url": (
-                        f"{settings.APP_BASE_URL}"
-                        f"/account/"
-                        f"{subscription.organisation.slug}"
-                        f"/"
-                    ),
+                    "return_url": return_url,
+                    "cancel_url": cancel_url,
                 },
             },
             timeout=20,
@@ -792,7 +760,9 @@ class PayPalBillingAdapter(
         approval_url = None
         for link in data.get("links", []):
             if link.get("rel") == "approve":
-                approval_url = link.get("href")
+                approval_url = link.get(
+                    "href"
+                )
                 break
         return {
             "approval_url": approval_url,

@@ -31,6 +31,8 @@ from properties.models import (
 )
 from operations.notifications import create_notification
 from django.utils.dateparse import parse_datetime
+import logging
+logger = logging.getLogger(__name__)
 def generate_recurring_tasks_for_date(
     target_date,
     property_obj=None,
@@ -246,6 +248,13 @@ def update_subscription_statuses():
     now = timezone.now()
     updated_count = 0
     for subscription in subscriptions:
+        if (
+            subscription.billing_provider
+            == OrganisationSubscription
+            .BillingProvider
+            .PAYPAL
+        ):
+            continue
         # ------------------------------------------
         # TRIAL EXPIRY
         # ------------------------------------------
@@ -754,11 +763,25 @@ def create_billing_session(
     adapter = get_billing_adapter(
         subscription
     )
-    provider_session = (
-        adapter.create_checkout_session(
-            session
+    try:
+        provider_session = (
+            adapter.create_checkout_session(
+                session
+            )
         )
-    )
+    except Exception:
+        session.status = (
+            OrganisationBillingSession
+            .Status
+            .FAILED
+        )
+        session.save(
+            update_fields=[
+                "status",
+                "updated_at",
+            ]
+        )
+        raise
     session.provider_session_id = (
         provider_session.get(
             "session_id",
@@ -1023,7 +1046,11 @@ def _process_paypal_webhook_event(event):
                     subscription
                 )
             except Exception:
-                pass
+                logger.exception(
+                    "PayPal billing period sync failed "
+                    "for subscription %s.",
+                    subscription.pk,
+                )
             return True
         # --------------------------------------------------
         # PAYMENT COMPLETED
@@ -1109,10 +1136,11 @@ def _process_paypal_webhook_event(event):
                     subscription
                 )
             except Exception:
-                # Do not fail an otherwise valid PayPal
-                # payment webhook just because the
-                # billing-period sync failed.
-                pass
+                logger.exception(
+                    "PayPal billing period sync failed "
+                    "for subscription %s.",
+                    subscription.pk,
+                )
             return True
         if event_type == "BILLING.SUBSCRIPTION.UPDATED":
             metadata = (
@@ -1655,3 +1683,386 @@ def sync_paypal_billing_period(
         update_fields=update_fields
     )
     return parsed_date
+def reconcile_paypal_subscriptions():
+    """
+    Reconcile RK Ops subscription state against PayPal.
+    This is a safety net for delayed or missed webhooks.
+    Webhooks remain the primary source of billing events.
+    """
+    subscriptions = (
+        OrganisationSubscription.objects
+        .select_related("organisation")
+        .filter(
+            billing_provider=(
+                OrganisationSubscription
+                .BillingProvider
+                .PAYPAL
+            ),
+            organisation__is_active=True,
+        )
+        .exclude(
+            provider_subscription_id=""
+        )
+    )
+    checked_count = 0
+    updated_count = 0
+    failed_count = 0
+    for subscription in subscriptions:
+        checked_count += 1
+        try:
+            adapter = get_billing_adapter(
+                subscription
+            )
+            paypal_data = (
+                adapter.get_subscription(
+                    subscription
+                    .provider_subscription_id
+                )
+            )
+        except Exception:
+            failed_count += 1
+            logger.exception(
+                "PayPal reconciliation failed "
+                "for subscription %s.",
+                subscription.pk,
+            )
+            continue
+        paypal_status = paypal_data.get(
+            "status",
+            "",
+        )
+        previous_status = (
+            subscription.status
+        )
+        # ------------------------------------------
+        # ACTIVE AT PAYPAL
+        # ------------------------------------------
+        if paypal_status == "ACTIVE":
+            now = timezone.now()
+            if (
+                subscription.trial_ends_at
+                and subscription.trial_ends_at > now
+            ):
+                desired_status = (
+                    OrganisationSubscription
+                    .Status
+                    .TRIAL
+                )
+            else:
+                desired_status = (
+                    OrganisationSubscription
+                    .Status
+                    .ACTIVE
+                )
+            if (
+                subscription.status
+                != desired_status
+            ):
+                change_subscription_status(
+                    subscription,
+                    desired_status,
+                    reason=(
+                        "RK Ops reconciled "
+                        "subscription status "
+                        "with PayPal."
+                    ),
+                )
+                updated_count += 1
+            try:
+                sync_paypal_billing_period(
+                    subscription
+                )
+            except Exception:
+                logger.exception(
+                    "PayPal billing period "
+                    "reconciliation failed "
+                    "for subscription %s.",
+                    subscription.pk,
+                )
+        # ------------------------------------------
+        # SUSPENDED AT PAYPAL
+        # ------------------------------------------
+        elif paypal_status == "SUSPENDED":
+            if (
+                subscription.status
+                != OrganisationSubscription
+                .Status
+                .SUSPENDED
+            ):
+                change_subscription_status(
+                    subscription,
+                    OrganisationSubscription
+                    .Status
+                    .SUSPENDED,
+                    reason=(
+                        "RK Ops reconciled a "
+                        "PayPal suspension."
+                    ),
+                )
+                updated_count += 1
+        # ------------------------------------------
+        # CANCELLED / EXPIRED AT PAYPAL
+        # ------------------------------------------
+        elif paypal_status in {
+            "CANCELLED",
+            "EXPIRED",
+        }:
+            metadata = (
+                subscription.billing_metadata
+                or {}
+            )
+            now = timezone.now()
+            keep_paid_access = (
+                metadata.get(
+                    "cancel_at_period_end",
+                    False,
+                )
+                and subscription
+                .current_period_ends_at
+                and subscription
+                .current_period_ends_at > now
+            )
+            if (
+                not keep_paid_access
+                and subscription.status
+                != OrganisationSubscription
+                .Status
+                .CANCELLED
+            ):
+                change_subscription_status(
+                    subscription,
+                    OrganisationSubscription
+                    .Status
+                    .CANCELLED,
+                    reason=(
+                        "RK Ops reconciled a "
+                        f"PayPal {paypal_status.lower()} "
+                        "subscription."
+                    ),
+                )
+                if not subscription.cancelled_at:
+                    subscription.cancelled_at = now
+                    subscription.save(
+                        update_fields=[
+                            "cancelled_at",
+                            "updated_at",
+                        ]
+                    )
+                updated_count += 1
+        if (
+            previous_status
+            != subscription.status
+        ):
+            logger.info(
+                "PayPal reconciliation changed "
+                "subscription %s from %s to %s.",
+                subscription.pk,
+                previous_status,
+                subscription.status,
+            )
+    return {
+        "checked": checked_count,
+        "updated": updated_count,
+        "failed": failed_count,
+    }
+def reconcile_pending_paypal_billing_sessions():
+    """
+    Recover PayPal billing sessions that are still pending
+    even though PayPal has already activated the subscription.
+    This protects RK Ops against delayed or missed activation
+    webhooks.
+    """
+    now = timezone.now()
+    sessions = (
+        OrganisationBillingSession.objects
+        .select_related(
+            "subscription",
+            "organisation",
+        )
+        .filter(
+            provider=(
+                OrganisationSubscription
+                .BillingProvider
+                .PAYPAL
+            ),
+            status=(
+                OrganisationBillingSession
+                .Status
+                .PENDING
+            ),
+        )
+        .exclude(
+            provider_session_id=""
+        )
+    )
+    checked_count = 0
+    completed_count = 0
+    cancelled_count = 0
+    failed_count = 0
+    for session in sessions:
+        checked_count += 1
+        subscription = session.subscription
+        try:
+            adapter = get_billing_adapter(
+                subscription
+            )
+            paypal_data = (
+                adapter.get_subscription(
+                    session.provider_session_id
+                )
+            )
+        except Exception:
+            failed_count += 1
+            logger.exception(
+                "Pending PayPal billing session "
+                "reconciliation failed for session %s.",
+                session.pk,
+            )
+            continue
+        paypal_status = paypal_data.get(
+            "status",
+            "",
+        )
+        # ------------------------------------------
+        # PAYPAL ACTIVE
+        # ------------------------------------------
+        if paypal_status == "ACTIVE":
+            if (
+                subscription.provider_subscription_id
+                != session.provider_session_id
+            ):
+                subscription.provider_subscription_id = (
+                    session.provider_session_id
+                )
+                subscription.save(
+                    update_fields=[
+                        "provider_subscription_id",
+                        "updated_at",
+                    ]
+                )
+            change_subscription_plan(
+                subscription,
+                session.requested_plan,
+                reason=(
+                    "PayPal billing session recovered "
+                    "during reconciliation."
+                ),
+                sync_provider=False,
+            )
+            is_trial_signup = bool(
+                session.metadata.get(
+                    "trial_signup"
+                )
+            )
+            if is_trial_signup:
+                if not subscription.trial_ends_at:
+                    subscription.trial_ends_at = (
+                        now
+                        + timedelta(days=14)
+                    )
+                    subscription.save(
+                        update_fields=[
+                            "trial_ends_at",
+                            "updated_at",
+                        ]
+                    )
+                change_subscription_status(
+                    subscription,
+                    OrganisationSubscription
+                    .Status
+                    .TRIAL,
+                    reason=(
+                        "PayPal trial activation "
+                        "recovered during reconciliation."
+                    ),
+                )
+            else:
+                change_subscription_status(
+                    subscription,
+                    OrganisationSubscription
+                    .Status
+                    .ACTIVE,
+                    reason=(
+                        "PayPal subscription activation "
+                        "recovered during reconciliation."
+                    ),
+                )
+            session.status = (
+                OrganisationBillingSession
+                .Status
+                .COMPLETED
+            )
+            session.completed_at = now
+            session.save(
+                update_fields=[
+                    "status",
+                    "completed_at",
+                    "updated_at",
+                ]
+            )
+            try:
+                sync_paypal_billing_period(
+                    subscription
+                )
+            except Exception:
+                logger.exception(
+                    "PayPal billing period sync "
+                    "failed while recovering "
+                    "billing session %s.",
+                    session.pk,
+                )
+            completed_count += 1
+            logger.warning(
+                "Recovered pending PayPal billing "
+                "session %s as ACTIVE.",
+                session.pk,
+            )
+            continue
+        # ------------------------------------------
+        # PAYPAL CANCELLED / EXPIRED
+        # ------------------------------------------
+        if paypal_status in {
+            "CANCELLED",
+            "EXPIRED",
+        }:
+            session.status = (
+                OrganisationBillingSession
+                .Status
+                .CANCELLED
+            )
+            session.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+            cancelled_count += 1
+            continue
+        # ------------------------------------------
+        # LOCAL SESSION EXPIRED
+        # ------------------------------------------
+        if (
+            session.expires_at
+            and session.expires_at <= now
+            and paypal_status in {
+                "APPROVAL_PENDING",
+                "APPROVED",
+            }
+        ):
+            session.status = (
+                OrganisationBillingSession
+                .Status
+                .EXPIRED
+            )
+            session.save(
+                update_fields=[
+                    "status",
+                    "updated_at",
+                ]
+            )
+    return {
+        "checked": checked_count,
+        "completed": completed_count,
+        "cancelled": cancelled_count,
+        "failed": failed_count,
+    }

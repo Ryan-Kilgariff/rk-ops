@@ -14,7 +14,6 @@ from operations.billing.paypal import (
     PayPalBillingAdapter,
     PayPalAPIError,
 )
-from operations.billing.paypal import PayPalAPIError
 from operations.services import (
     create_billing_session,
 )
@@ -161,10 +160,6 @@ def organisation_trial_choose_plan(
             OrganisationSubscription.Status.PAST_DUE,
         }
     ):
-        print(
-            "TRIAL PLAN DEBUG: redirecting "
-            "because subscription already active"
-        )
         return redirect(
             "operations:organisation_account",
             organisation_slug=organisation.slug,

@@ -34,8 +34,6 @@ from operations.billing.paypal import (
     PayPalAPIError,
 )
 from django.contrib import messages
-from django.utils import timezone
-from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import logging
 logger = logging.getLogger(__name__)
@@ -621,9 +619,13 @@ def paypal_billing_return(
         .first()
     )
     if not billing_session:
-        messages.warning(
+        messages.info(
             request,
-            "No pending PayPal billing session was found.",
+            (
+                "PayPal approval was received. "
+                "RK Ops is checking the latest "
+                "subscription status."
+            ),
         )
         return redirect(
             "operations:organisation_account",
@@ -632,124 +634,62 @@ def paypal_billing_return(
     adapter = get_billing_adapter(
         subscription
     )
-    paypal_data = adapter.get_subscription(
-        billing_session.provider_session_id
-    )
+    try:
+        paypal_data = adapter.get_subscription(
+            billing_session.provider_session_id
+        )
+    except PayPalAPIError:
+        logger.exception(
+            "PayPal return status check failed "
+            "for billing session %s.",
+            billing_session.pk,
+        )
+        messages.info(
+            request,
+            (
+                "PayPal approval was received. "
+                "RK Ops is waiting for PayPal "
+                "to confirm the subscription."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
     paypal_status = paypal_data.get(
         "status",
-        ""
+        "",
     )
     if paypal_status == "ACTIVE":
-        # ------------------------------------------
-        # STORE THE NEW ACTIVE PAYPAL SUBSCRIPTION
-        # ------------------------------------------
-        if (
-            subscription.provider_subscription_id
-            != billing_session.provider_session_id
-        ):
-            subscription.provider_subscription_id = (
-                billing_session.provider_session_id
-            )
-            subscription.save(
-                update_fields=[
-                    "provider_subscription_id",
-                    "updated_at",
-                ]
-            )
-        # ------------------------------------------
-        # APPLY THE REQUESTED PLAN
-        # ------------------------------------------
-        change_subscription_plan(
-            subscription,
-            billing_session.requested_plan,
-            reason=(
-                "Subscription plan changed "
-                "after PayPal confirmation."
-            ),
-            changed_by=request.user,
-            sync_provider=False,
-        )
-        # ------------------------------------------
-        # COMPLETE BILLING SESSION
-        # ------------------------------------------
-        billing_session.status = (
-            OrganisationBillingSession
-            .Status
-            .COMPLETED
-        )
-        billing_session.completed_at = (
-            timezone.now()
-        )
-        billing_session.save(
-            update_fields=[
-                "status",
-                "completed_at",
-                "updated_at",
-            ]
-        )
-        # ------------------------------------------
-        # CLEAR OLD CANCELLATION STATE
-        # ------------------------------------------
-        if subscription.cancelled_at:
-            subscription.cancelled_at = None
-            subscription.save(
-                update_fields=[
-                    "cancelled_at",
-                    "updated_at",
-                ]
-            )
-        # ------------------------------------------
-        # ENSURE RK OPS IS ACTIVE
-        # ------------------------------------------
-        is_trial_signup = bool(
-            billing_session.metadata.get(
-                "trial_signup"
-            )
-        )
-        if is_trial_signup:
-            if not subscription.trial_ends_at:
-                subscription.trial_ends_at = (
-                    timezone.now()
-                    + timedelta(days=14)
-                )
-                subscription.save(
-                    update_fields=[
-                        "trial_ends_at",
-                        "updated_at",
-                    ]
-                )
-            change_subscription_status(
-                subscription,
-                OrganisationSubscription.Status.TRIAL,
-                reason=(
-                    "PayPal subscription approved "
-                    "and 14-day trial started."
-                ),
-                changed_by=request.user,
-            )
-        else:
-            change_subscription_status(
-                subscription,
-                OrganisationSubscription.Status.ACTIVE,
-                reason=(
-                    "PayPal subscription activated."
-                ),
-                changed_by=request.user,
-            )
         messages.success(
             request,
             (
-                "PayPal confirmed the subscription. "
-                "Your RK Ops subscription is active."
+                "PayPal approved the subscription. "
+                "RK Ops will update your account "
+                "automatically when PayPal confirms it."
+            ),
+        )
+    elif paypal_status in {
+        "APPROVAL_PENDING",
+        "APPROVED",
+    }:
+        messages.info(
+            request,
+            (
+                "PayPal approval was received. "
+                "The subscription is still being "
+                "confirmed."
             ),
         )
     else:
         messages.info(
             request,
             (
-                "PayPal approval was received, "
-                "but the subscription is not active yet. "
-                f"Current PayPal status: {paypal_status or 'Unknown'}."
+                "PayPal returned the subscription "
+                f"with status: "
+                f"{paypal_status or 'Unknown'}. "
+                "RK Ops will continue syncing "
+                "automatically."
             ),
         )
     return redirect(
@@ -830,19 +770,26 @@ def paypal_webhook(request):
             },
             status=400,
         )
+    event_type = event.get(
+        "event_type",
+        "",
+    )
+    event_id = event.get(
+        "id",
+        "",
+    )
     adapter = PayPalBillingAdapter()
     try:
         verified = adapter.verify_webhook(
             headers=request.headers,
             event=event,
         )
-    except Exception as exc:
-        logger.info(
-            "PayPal webhook processed: "
-            "event_type=%s event_id=%s processed=%s",
+    except Exception:
+        logger.exception(
+            "PayPal webhook verification failed: "
+            "event_type=%s event_id=%s",
             event_type,
             event_id,
-            processed,
         )
         return JsonResponse(
             {
@@ -854,6 +801,12 @@ def paypal_webhook(request):
             status=400,
         )
     if not verified:
+        logger.warning(
+            "Invalid PayPal webhook signature: "
+            "event_type=%s event_id=%s",
+            event_type,
+            event_id,
+        )
         return JsonResponse(
             {
                 "detail": (
@@ -863,31 +816,18 @@ def paypal_webhook(request):
             },
             status=400,
         )
-    event_type = event.get(
-        "event_type",
-        "",
-    )
-    event_id = event.get(
-        "id",
-        "",
-    )
-    resource = event.get(
-        "resource",
-        {},
-    )
     try:
         processed = (
             process_paypal_webhook_event(
                 event
             )
         )
-    except Exception as exc:
-        logger.info(
-            "PayPal webhook processed: "
-            "event_type=%s event_id=%s processed=%s",
+    except Exception:
+        logger.exception(
+            "PayPal webhook processing failed: "
+            "event_type=%s event_id=%s",
             event_type,
             event_id,
-            processed,
         )
         return JsonResponse(
             {

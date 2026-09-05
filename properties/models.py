@@ -481,6 +481,7 @@ class OrganisationBillingSession(models.Model):
     provider_session_id = models.CharField(
         max_length=255,
         blank=True,
+        db_index=True
     )
     provider_checkout_url = models.URLField(
         max_length=1000,
