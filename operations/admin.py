@@ -6,6 +6,7 @@ from .models import (
     ChecklistRun,
     HandoverNote,
     Issue,
+    RecurringTask,
     Task,
 )
 @admin.register(Task)
@@ -97,4 +98,33 @@ class ChecklistCompletionAdmin(admin.ModelAdmin):
         "item",
         "completed_by",
         "completed_at",
+    )
+@admin.register(RecurringTask)
+class RecurringTaskAdmin(admin.ModelAdmin):
+    list_display = (
+        "title",
+        "property",
+        "frequency",
+        "weekday",
+        "due_time",
+        "is_active",
+        "last_generated_for",
+        "last_generated_at",
+    )
+    list_filter = (
+        "property",
+        "frequency",
+        "is_active",
+    )
+    search_fields = (
+        "title",
+        "description",
+        "property__name",
+    )
+    raw_id_fields = (
+        "assigned_to",
+    )
+    ordering = (
+        "property__name",
+        "title",
     )

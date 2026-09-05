@@ -237,22 +237,20 @@
             </div>
         </header>
         <main class="content">
-            {% if subscription_warning %}
-                <div class="subscription-warning">
+            {% if subscription_warning and can_manage_organisation %}
+                <div
+                    class="
+                        subscription-alert
+                        subscription-alert-warning
+                    "
+                >
                     <div>
                         <strong>
                             Subscription payment requires attention.
                         </strong>
-                        RK Ops access is currently continuing,
-                        but billing should be reviewed.
+                        RK Ops access is continuing for now.
+                        Please review your billing details.
                     </div>
-                    {% if property.organisation %}
-                        <a
-                            href="{% url 'operations:organisation_account' property.organisation.slug %}"
-                        >
-                            View account
-                        </a>
-                    {% endif %}
                 </div>
             {% endif %}
             {% if messages %}

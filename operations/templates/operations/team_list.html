@@ -18,12 +18,14 @@ Team
             Manage staff access for {{ property.name }}.
         </p>
     </div>
-    <a
-        href="{% url 'operations:team_member_create' property.slug %}"
-        class="button"
-    >
-        + Invite Team Member
-    </a>
+    {% if can_manage_team %}
+        <a 
+            href="{% url 'operations:team_member_create' property.slug %}" 
+            class="button" 
+        > 
+            + Invite Team Member 
+        </a>
+    {% endif %}
 </div>
 <section class="section">
     <div class="team-list">
