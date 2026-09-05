@@ -10,27 +10,58 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 import os
+import dj_database_url
 from pathlib import Path
 from dotenv import load_dotenv
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(
     BASE_DIR / ".env"
 )
+def env_bool(name, default=False):
+    value = os.getenv(
+        name,
+        str(default),
+    )
+    return value.lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+# Build paths inside the project like this: BASE_DIR / 'subdir'.
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-6goaicrwd-*qg1zl!*6wxua!pokr6l$-_5%s_yrxm)r5!xd!z3'
-
+SECRET_KEY = os.getenv(
+    "DJANGO_SECRET_KEY",
+    "django-insecure-local-development-only",
+)
+DEBUG = env_bool(
+    "DEBUG",
+    True,
+)
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
 
 ALLOWED_HOSTS = [
-    "127.0.0.1",
-    "localhost",
-    ".ngrok-free.dev",
+    host.strip()
+    for host in os.getenv(
+        "ALLOWED_HOSTS",
+        (
+            "127.0.0.1,"
+            "localhost,"
+            ".ngrok-free.dev"
+        ),
+    ).split(",")
+    if host.strip()
+]
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CSRF_TRUSTED_ORIGINS",
+        "",
+    ).split(",")
+    if origin.strip()
 ]
 # Application definition
 
@@ -80,12 +111,27 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "",
+)
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": (
+                "django.db.backends.sqlite3"
+            ),
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.UsernameOrEmailBackend",
     "django.contrib.auth.backends.ModelBackend",
@@ -132,12 +178,44 @@ LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
-
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}
+if DEBUG:
+    MAILERS = {
+        "default": {
+            "BACKEND": (
+                "django.core.mail.backends.console.EmailBackend"
+            ),
+        },
+    }
+else:
+    MAILERS = {
+        "default": {
+            "BACKEND": (
+                "django.core.mail.backends.smtp.EmailBackend"
+            ),
+            "HOST": os.getenv(
+                "EMAIL_HOST",
+                "",
+            ),
+            "PORT": int(
+                os.getenv(
+                    "EMAIL_PORT",
+                    "587",
+                )
+            ),
+            "USERNAME": os.getenv(
+                "EMAIL_HOST_USER",
+                "",
+            ),
+            "PASSWORD": os.getenv(
+                "EMAIL_HOST_PASSWORD",
+                "",
+            ),
+            "USE_TLS": env_bool(
+                "EMAIL_USE_TLS",
+                True,
+            ),
+        },
+    }
 DEFAULT_FROM_EMAIL = (
     "RK Ops <noreply@rkhospitality.studio>"
 )
@@ -197,3 +275,32 @@ APP_BASE_URL = os.getenv(
     "APP_BASE_URL",
     "http://127.0.0.1:8000",
 )
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO",
+        "https",
+    )
+    # Start conservatively.
+    # Increase once Railway + custom domain HTTPS
+    # has been verified in production.
+    SECURE_HSTS_SECONDS = int(
+        os.getenv(
+            "SECURE_HSTS_SECONDS",
+            "0",
+        )
+    )
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+        env_bool(
+            "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+            False,
+        )
+    )
+    SECURE_HSTS_PRELOAD = (
+        env_bool(
+            "SECURE_HSTS_PRELOAD",
+            False,
+        )
+    )
