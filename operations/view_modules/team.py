@@ -4,9 +4,6 @@ from operations.activity import log_activity
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from operations.utils import (
-    require_invitation_management_access,
-)
 from accounts.forms import (
     OrganisationInvitationForm,
     MembershipEditForm,
@@ -23,7 +20,9 @@ from accounts.models import (
 )
 from operations.utils import (
     require_management_access,
+    require_supervisory_access,
     require_organisation_management_access,
+    require_invitation_management_access,
     get_property_for_user,
 )
 from django.conf import settings
@@ -46,23 +45,23 @@ def team_list(
     request,
     property_slug,
 ):
-    property_obj = require_management_access(
+    property_obj = require_supervisory_access(
         request.user,
         property_slug,
     )
     memberships = (
-            PropertyMembership.objects
-            .filter(
-                property=property_obj,
-                is_active=True,
-            )
-            .select_related(
-                "user",
-            )
-            .order_by(
-                "user__username",
-            )
+        PropertyMembership.objects
+        .filter(
+            property=property_obj,
+            is_active=True,
         )
+        .select_related(
+            "user",
+        )
+        .order_by(
+            "user__username",
+        )
+    )
     role_rank = {
         PropertyMembership.Role.OWNER: 4,
         PropertyMembership.Role.MANAGER: 3,
@@ -80,13 +79,25 @@ def team_list(
             )
             .first()
         )
+    can_manage_team = (
+        request.user.is_superuser
+        or (
+            acting_membership
+            and acting_membership.role
+            in {
+                PropertyMembership.Role.OWNER,
+                PropertyMembership.Role.MANAGER,
+            }
+        )
+    )
     team_rows = []
     for membership in memberships:
         can_manage_member = False
         if request.user.is_superuser:
             can_manage_member = True
         elif (
-            acting_membership
+            can_manage_team
+            and acting_membership
             and membership.user_id != request.user.id
             and role_rank[membership.role]
             < role_rank[acting_membership.role]
@@ -98,24 +109,28 @@ def team_list(
                 "can_manage_member": can_manage_member,
             }
         )
-    pending_invitations = (
-        OrganisationInvitation.objects
-        .filter(
-            organisation=property_obj.organisation,
-            properties=property_obj,
-            is_active=True,
-            accepted_at__isnull=True,
-            revoked_at__isnull=True,
+    pending_invitations = []
+    if can_manage_team:
+        pending_invitations = (
+            OrganisationInvitation.objects
+            .filter(
+                organisation=property_obj.organisation,
+                properties=property_obj,
+                is_active=True,
+                accepted_at__isnull=True,
+                revoked_at__isnull=True,
+            )
+            .distinct()
+            .order_by("-created_at")
         )
-        .distinct()
-        .order_by("-created_at")
-    )
     context = {
         "property": property_obj,
         "memberships": memberships,
         "active_page": "team",
         "pending_invitations": pending_invitations,
         "team_rows": team_rows,
+        "can_manage_team": can_manage_team,
+        "membership": acting_membership,
     }
     return render(
         request,
@@ -830,6 +845,7 @@ def organisation_invitation_signup(
             user.email = invited_email
             user.username = (
                 form.cleaned_data["username"]
+                .strip()
             )
             user.set_password(
                 form.cleaned_data["password1"]
@@ -838,7 +854,8 @@ def organisation_invitation_signup(
             login(
                 request,
                 user,
-                backend="django.contrib.auth.backends.ModelBackend",
+                backend="accounts.backends."
+                    "UsernameOrEmailBackend"
             )
             accept_organisation_invitation(
                 invitation=invitation,

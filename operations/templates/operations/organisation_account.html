@@ -240,31 +240,41 @@ Account
             {% endif %}
         {% endif %}
     </div>
-<div class="account-list">
-    {% for row in property_rows %}
-        {% with property_item=row.property %}
-            {% if subscription %}
-                {% if subscription.status == "suspended" or subscription.status == "cancelled" %}
+    <div class="account-list">
+        {% for row in property_rows %}
+            {% with property_item=row.property %}
+                {% if not property_item.is_active %}
                     <div class="account-list-item account-list-item-disabled">
                         <div>
                             <strong>
                                 {{ property_item.name }}
                             </strong>
                             <div class="task-meta">
-                                {% if row.membership %}
-                                    {{ row.membership.get_role_display }}
+                                Inactive
+                                {% if property_item.town_city %}
+                                    · {{ property_item.town_city }}
+                                {% endif %}
+                                {% if property_item.postcode %}
+                                    · {{ property_item.postcode }}
                                 {% endif %}
                             </div>
                         </div>
-                        <span class="account-property-locked">
-                            Access unavailable
-                        </span>
+                        <div class="account-property-actions">
+                            {% if can_manage_organisation %}
+                                <a
+                                    href="{% url 'operations:organisation_property_edit' organisation.slug property_item.slug %}"
+                                    class="button secondary-action"
+                                >
+                                    Edit
+                                </a>
+                            {% endif %}
+                            <span class="account-property-locked">
+                                Inactive
+                            </span>
+                        </div>
                     </div>
-                {% else %}
-                    <a
-                        href="{% url 'operations:dashboard' property_item.slug %}"
-                        class="account-list-item"
-                    >
+                {% elif subscription and subscription.status == "suspended" or subscription.status == "cancelled" %}
+                    <div class="account-list-item account-list-item-disabled">
                         <div>
                             <strong>
                                 {{ property_item.name }}
@@ -281,45 +291,69 @@ Account
                                 {% endif %}
                             </div>
                         </div>
-                        <span class="account-arrow">
-                            →
-                        </span>
-                    </a>
-                {% endif %}
-            {% else %}
-                <a
-                    href="{% url 'operations:dashboard' property_item.slug %}"
-                    class="account-list-item"
-                >
-                    <div>
-                        <strong>
-                            {{ property_item.name }}
-                        </strong>
-                        <div class="task-meta">
-                            {% if row.membership %}
-                                {{ row.membership.get_role_display }}
+                        <div class="account-property-actions">
+                            {% if can_manage_organisation %}
+                                <a
+                                    href="{% url 'operations:organisation_property_edit' organisation.slug property_item.slug %}"
+                                    class="button secondary-action"
+                                >
+                                    Edit
+                                </a>
                             {% endif %}
-                            {% if property_item.town_city %}
-                                · {{ property_item.town_city }}
-                            {% endif %}
-                            {% if property_item.postcode %}
-                                · {{ property_item.postcode }}
-                            {% endif %}
+                            <span class="account-property-locked">
+                                Access unavailable
+                            </span>
                         </div>
                     </div>
-                    <span class="account-arrow">
-                        →
-                    </span>
-                </a>
-            {% endif %}
-        {% endwith %}
-    {% empty %}
-        <div class="empty-state">
-            No active properties.
-        </div>
-    {% endfor %}
-</div>
-</section>
+                {% else %}
+                    <div class="account-list-item">
+                        <a
+                            href="{% url 'operations:dashboard' property_item.slug %}"
+                            class="account-property-main"
+                        >
+                            <div>
+                                <strong>
+                                    {{ property_item.name }}
+                                </strong>
+                                <div class="task-meta">
+                                    {% if row.membership %}
+                                        {{ row.membership.get_role_display }}
+                                    {% endif %}
+                                    {% if property_item.town_city %}
+                                        · {{ property_item.town_city }}
+                                    {% endif %}
+                                    {% if property_item.postcode %}
+                                        · {{ property_item.postcode }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </a>
+                        <div class="account-property-actions">
+                            {% if can_manage_organisation %}
+                                <a
+                                    href="{% url 'operations:organisation_property_edit' organisation.slug property_item.slug %}"
+                                    class="button secondary-action"
+                                >
+                                    Edit
+                                </a>
+                            {% endif %}
+                            <a
+                                href="{% url 'operations:dashboard' property_item.slug %}"
+                                class="account-arrow"
+                                aria-label="Open {{ property_item.name }}"
+                            >
+                                →
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            {% endwith %}
+        {% empty %}
+            <div class="empty-state">
+                No properties.
+            </div>
+        {% endfor %}
+    </div>
 <section class="section">
     <div class="section-header">
         <div>
@@ -365,31 +399,31 @@ Account
             {% endif %}
         </div>
     </div>
-    <div class="account-list">
-        {% for member in organisation_memberships %}
-            <div class="account-list-item">
-                <div>
-                    <strong>
-                        {% if member.user.get_full_name %}
-                            {{ member.user.get_full_name }}
-                        {% else %}
-                            {{ member.user.username }}
-                        {% endif %}
-                    </strong>
-                    <div class="task-meta">
-                        {{ member.user.email|default:"No email" }}
-                    </div>
+<div class="account-list">
+    {% for member in organisation_memberships %}
+        <div class="account-list-item">
+            <div>
+                <strong>
+                    {% if member.user.get_full_name %}
+                        {{ member.user.get_full_name }}
+                    {% else %}
+                        {{ member.user.username }}
+                    {% endif %}
+                </strong>
+                <div class="task-meta">
+                    {{ member.user.email|default:"No email" }}
                 </div>
-                <span class="account-role">
-                    {{ member.get_role_display }}
-                </span>
             </div>
-        {% empty %}
-            <div class="empty-state">
-                No organisation members.
-            </div>
-        {% endfor %}
-    </div>
+            <span class="account-role">
+                {{ member.get_role_display }}
+            </span>
+        </div>
+    {% empty %}
+        <div class="empty-state">
+            No organisation members.
+        </div>
+    {% endfor %}
+</div>
 </section>
 {% if can_manage_organisation %}
 {% if pending_invitations %}

@@ -84,7 +84,7 @@
                 >
                     Checklists
                 </a>
-                {% if can_manage_team %}
+                {% if can_supervise %}
                     <a
                         href="{% url 'operations:team_list' property.slug %}"
                         class="nav-link {% if active_page == 'team' %}active{% endif %}"

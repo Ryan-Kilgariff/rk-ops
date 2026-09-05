@@ -66,11 +66,18 @@ class InvitationSignupForm(forms.ModelForm):
         help_text=(
             "You'll use this username to sign in to RK Ops."
         ),
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "autocomplete": "username",
+            }
+        ),
     )
     password1 = forms.CharField(
         widget=forms.PasswordInput(
             attrs={
                 "class": "form-control",
+                "autocomplete": "new-password",
             }
         ),
         label="Password",
@@ -79,6 +86,7 @@ class InvitationSignupForm(forms.ModelForm):
         widget=forms.PasswordInput(
             attrs={
                 "class": "form-control",
+                "autocomplete": "new-password",
             }
         ),
         label="Confirm password",
@@ -86,6 +94,7 @@ class InvitationSignupForm(forms.ModelForm):
     class Meta:
         model = User
         fields = [
+            "username",
             "first_name",
             "last_name",
         ]

@@ -32,6 +32,8 @@ from .view_modules.account import (
     account_home,
     organisation_account,
     organisation_property_create,
+    organisation_property_edit,
+    organisation_property_delete,
     subscription_history,
     billing_history,
     property_home,

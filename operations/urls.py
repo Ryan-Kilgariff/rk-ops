@@ -239,6 +239,22 @@ urlpatterns = [
         name="organisation_property_create",
     ),
     path(
+        (
+            "account/<slug:organisation_slug>/"
+            "properties/<slug:property_slug>/edit/"
+        ),
+        views.organisation_property_edit,
+        name="organisation_property_edit",
+    ),
+    path(
+        (
+            "account/<slug:organisation_slug>/"
+            "properties/<slug:property_slug>/delete/"
+        ),
+        views.organisation_property_delete,
+        name="organisation_property_delete",
+    ),
+    path(
         "account/<slug:organisation_slug>/members/invite/",
         views.organisation_invite_member,
         name="organisation_invite_member",

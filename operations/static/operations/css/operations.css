@@ -1670,6 +1670,36 @@ a.account-list-item:hover {
     font-weight: 800;
 }
 /* --------------------------------------------------
+   Account property rows
+   -------------------------------------------------- */
+.account-property-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: block;
+    color: var(--text);
+    text-decoration: none;
+}
+.account-property-main strong {
+    display: block;
+    color: var(--text);
+}
+.account-property-main:hover strong {
+    text-decoration: underline;
+}
+.account-property-actions {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.account-property-actions .account-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    text-decoration: none;
+}
+/* --------------------------------------------------
    Section header actions / limits
    -------------------------------------------------- */
 .section-header-actions {

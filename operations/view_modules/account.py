@@ -1,6 +1,10 @@
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.shortcuts import redirect, render
+from django.shortcuts import (
+    get_object_or_404,
+    redirect,
+    render,
+)
 from django.utils import timezone
 from accounts.forms import ProfileForm
 from django.contrib import messages
@@ -209,13 +213,24 @@ def organisation_account(
     )
     properties = (
         organisation.properties
-        .filter(
-            is_active=True,
-        )
+        .all()
         .order_by(
             "name"
         )
     )
+    if (
+        not request.user.is_superuser
+        and not can_manage_organisation
+    ):
+        properties = (
+            properties
+            .filter(
+                is_active=True,
+                memberships__user=request.user,
+                memberships__is_active=True,
+            )
+            .distinct()
+        )
     if (
         not request.user.is_superuser
         and not can_manage_organisation
@@ -292,11 +307,7 @@ def organisation_account(
             }
         )
     property_count = (
-        organisation.properties
-        .filter(
-            is_active=True,
-        )
-        .count()
+        organisation.properties.count()
     )
     active_member_count = (
         OrganisationMembership.objects
@@ -526,12 +537,152 @@ def organisation_property_create(
         "organisation": organisation,
         "property": current_property,
         "form": form,
+        "form_mode": "create",
         "active_page": "account",
     }
     return render(
         request,
         "operations/organisation_property_form.html",
         context,
+    )
+@login_required
+def organisation_property_edit(
+    request,
+    organisation_slug,
+    property_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    property_obj = get_object_or_404(
+        Property,
+        organisation=organisation,
+        slug=property_slug,
+    )
+    if request.method == "POST":
+        form = PropertyForm(
+            request.POST,
+            instance=property_obj,
+        )
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                (
+                    f"{property_obj.name} "
+                    "has been updated."
+                ),
+            )
+            return redirect(
+                "operations:organisation_property_edit",
+                organisation_slug=organisation.slug,
+                property_slug=property_obj.slug,
+            )
+    else:
+        form = PropertyForm(
+            instance=property_obj,
+        )
+    context = {
+        "organisation": organisation,
+        "property": property_obj,
+        "property_obj": property_obj,
+        "form": form,
+        "form_mode": "edit",
+        "active_page": "account",
+    }
+    return render(
+        request,
+        "operations/organisation_property_form.html",
+        context,
+    )
+@login_required
+def organisation_property_delete(
+    request,
+    organisation_slug,
+    property_slug,
+):
+    organisation = (
+        require_organisation_management_access(
+            request.user,
+            organisation_slug,
+        )
+    )
+    property_obj = get_object_or_404(
+        Property,
+        organisation=organisation,
+        slug=property_slug,
+    )
+    if property_obj.is_active:
+        messages.error(
+            request,
+            (
+                "Deactivate this property before "
+                "deleting it permanently."
+            ),
+        )
+        return redirect(
+            "operations:organisation_property_edit",
+            organisation_slug=organisation.slug,
+            property_slug=property_obj.slug,
+        )
+    if request.method == "POST":
+        confirmation = (
+            request.POST.get(
+                "confirmation",
+                "",
+            )
+            .strip()
+        )
+        if confirmation != property_obj.name:
+            messages.error(
+                request,
+                (
+                    "The property name did not match. "
+                    "Nothing was deleted."
+                ),
+            )
+            return render(
+                request,
+                (
+                    "operations/"
+                    "organisation_property_delete.html"
+                ),
+                {
+                    "organisation": organisation,
+                    "property_obj": property_obj,
+                    "property": property_obj,
+                    "active_page": "account",
+                },
+            )
+        property_name = property_obj.name
+        property_obj.delete()
+        messages.success(
+            request,
+            (
+                f"{property_name} and its "
+                "operational data have been "
+                "permanently deleted."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    return render(
+        request,
+        (
+            "operations/"
+            "organisation_property_delete.html"
+        ),
+        {
+            "organisation": organisation,
+            "property_obj": property_obj,
+            "property": property_obj,
+            "active_page": "account",
+        },
     )
 @login_required
 def subscription_history(

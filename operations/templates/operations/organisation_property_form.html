@@ -1,19 +1,35 @@
 {% extends "operations/base.html" %}
 {% block title %}
-RK Ops | Add Property
+    {% if form_mode == "edit" %}
+        RK Ops | Edit Property
+    {% else %}
+        RK Ops | Add Property
+    {% endif %}
 {% endblock %}
 {% block topbar_title %}
-Add Property
+    {% if form_mode == "edit" %}
+        Edit Property
+    {% else %}
+        Add Property
+    {% endif %}
 {% endblock %}
 {% block content %}
 <p class="page-eyebrow">
     Organisation
 </p>
 <h1 class="page-title">
-    Add Property
+    {% if form_mode == "edit" %}
+        Edit Property
+    {% else %}
+        Add Property
+    {% endif %}
 </h1>
 <p class="page-subtitle">
-    Add a property to {{ organisation.name }}.
+    {% if form_mode == "edit" %}
+        Update {{ property_obj.name }}.
+    {% else %}
+        Add a property to {{ organisation.name }}.
+    {% endif %}
 </p>
 <section class="section">
     <form
@@ -36,6 +52,7 @@ Add Property
                     {{ error }}
                 </div>
             {% endfor %}
+        </div>
         <div class="form-group">
             <label for="{{ form.address_line_1.id_for_label }}">
                 Address line 1
@@ -46,6 +63,7 @@ Add Property
                     {{ error }}
                 </div>
             {% endfor %}
+        </div>
         <div class="form-group">
             <label for="{{ form.address_line_2.id_for_label }}">
                 Address line 2
@@ -56,6 +74,7 @@ Add Property
                     {{ error }}
                 </div>
             {% endfor %}
+        </div>
         <div class="form-row">
             <div class="form-group">
                 <label for="{{ form.town_city.id_for_label }}">
@@ -67,6 +86,7 @@ Add Property
                         {{ error }}
                     </div>
                 {% endfor %}
+            </div>
             <div class="form-group">
                 <label for="{{ form.postcode.id_for_label }}">
                     Postcode
@@ -78,48 +98,77 @@ Add Property
                     </div>
                 {% endfor %}
             </div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="{{ form.phone.id_for_label }}">
-                        Phone
-                    </label>
-                    {{ form.phone }}
-                    {% for error in form.phone.errors %}
-                        <div class="field-error">
-                            {{ error }}
-                        </div>
-                    {% endfor %}
-                <div class="form-group">
-                    <label for="{{ form.email.id_for_label }}">
-                        Email
-                    </label>
-                    {{ form.email }}
-                    {% for error in form.email.errors %}
-                        <div class="field-error">
-                            {{ error }}
-                        </div>
-                    {% endfor %}
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label for="{{ form.phone.id_for_label }}">
+                    Phone
+                </label>
+                {{ form.phone }}
+                {% for error in form.phone.errors %}
+                    <div class="field-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+            <div class="form-group">
+                <label for="{{ form.email.id_for_label }}">
+                    Email
+                </label>
+                {{ form.email }}
+                {% for error in form.email.errors %}
+                    <div class="field-error">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="form-group checkbox-group">
+            {{ form.is_active }}
+            <label for="{{ form.is_active.id_for_label }}">
+                Property active
+            </label>
+            {% for error in form.is_active.errors %}
+                <div class="field-error">
+                    {{ error }}
                 </div>
-                <div class="form-group checkbox-group">
-                    {{ form.is_active }}
-                    <label for="{{ form.is_active.id_for_label }}">
-                        Property active
-                    </label>
-                </div>
-                <div class="form-actions">
-                    <button
-                        type="submit"
-                        class="button"
-                    >
-                        Create Property
-                    </button>
-                    <a
-                        href="{% url 'operations:organisation_account' organisation.slug %}"
-                        class="button secondary-action"
-                    >
-                        Cancel
-                    </a>
-                </div>
-            </form>
-        </section>
-        {% endblock %}
+            {% endfor %}
+        </div>
+        {% if form_mode == "edit" and property_obj.is_active %}
+            <div class="form-help">
+                To permanently delete this property,
+                first deactivate it and save your changes.
+                The delete option will then become available.
+            </div>
+        {% endif %}
+        <div class="form-actions">
+            <button
+                type="submit"
+                class="button"
+            >
+                {% if form_mode == "edit" %}
+                    Save Changes
+                {% else %}
+                    Create Property
+                {% endif %}
+            </button>
+            <a
+                href="{% url 'operations:organisation_account' organisation.slug %}"
+                class="button secondary-action"
+            >
+                Cancel
+            </a>
+        </div>
+        {% if form_mode == "edit" and not property_obj.is_active %}
+            <div class="form-actions">
+                <a
+                    href="{% url 'operations:organisation_property_delete' organisation.slug property_obj.slug %}"
+                    class="button danger-action"
+                >
+                    Delete Property
+                </a>
+            </div>
+        {% endif %}
+    </form>
+</section>
+{% endblock %}

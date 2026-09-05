@@ -1,0 +1,70 @@
+{% extends "operations/base.html" %}
+{% block title %}
+RK Ops | Delete Property
+{% endblock %}
+{% block topbar_title %}
+Delete Property
+{% endblock %}
+{% block content %}
+<p class="page-eyebrow">
+    Organisation
+</p>
+<h1 class="page-title">
+    Delete {{ property_obj.name }}
+</h1>
+<p class="page-subtitle">
+    This action permanently removes the property
+    and its operational history.
+</p>
+<section class="section">
+    <div class="form-card">
+        <div class="subscription-alert subscription-alert-warning">
+            <div>
+                <strong>
+                    Permanent deletion
+                </strong>
+                <div class="task-meta">
+                    Tasks, issues, handovers, checklists,
+                    recurring tasks, activity history,
+                    notifications and property memberships
+                    connected to this property will be removed.
+                </div>
+            </div>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="confirmation">
+                    Type
+                    <strong>
+                        {{ property_obj.name }}
+                    </strong>
+                    to confirm
+                </label>
+                <input
+                    type="text"
+                    id="confirmation"
+                    name="confirmation"
+                    class="form-control"
+                    autocomplete="off"
+                    required
+                >
+            </div>
+            <div class="form-actions">
+                <button
+                    type="submit"
+                    class="button danger-action"
+                >
+                    Delete Property Permanently
+                </button>
+                <a
+                    href="{% url 'operations:organisation_property_edit' organisation.slug property_obj.slug %}"
+                    class="button secondary-action"
+                >
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
