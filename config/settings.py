@@ -230,6 +230,12 @@ else:
                 "EMAIL_USE_TLS",
                 True,
             ),
+            "TIMEOUT": int(
+                os.getenv(
+                    "EMAIL_TIMEOUT",
+                    "10",
+                )
+            ),
         },
     }
 DEFAULT_FROM_EMAIL = (
