@@ -1,3 +1,5 @@
+import uuid
+import requests
 import requests
 from django.conf import settings
 from .base import BillingProviderAdapter
@@ -242,15 +244,20 @@ class PayPalBillingAdapter(
                     billing_session.requested_plan
                 )
             )
+        app_base_url = (
+            settings.APP_BASE_URL.rstrip("/")
+        )
         return_url = (
-            "http://127.0.0.1:8000"
-            f"/account/{billing_session.organisation.slug}"
-            "/billing/paypal/return/"
+            f"{app_base_url}"
+            f"/account/"
+            f"{billing_session.organisation.slug}"
+            f"/billing/paypal/return/"
         )
         cancel_url = (
-            "http://127.0.0.1:8000"
-            f"/account/{billing_session.organisation.slug}"
-            "/billing/paypal/cancel/"
+            f"{app_base_url}"
+            f"/account/"
+            f"{billing_session.organisation.slug}"
+            f"/billing/paypal/cancel/"
         )
         response = requests.post(
             (
