@@ -5,7 +5,10 @@ from django.shortcuts import redirect, render
 from django.utils.text import slugify
 from django.utils import timezone
 from accounts.forms import SignUpForm
-from accounts.models import OrganisationMembership
+from accounts.models import (
+    OrganisationInvitation,
+    OrganisationMembership,
+)
 from properties.models import (
     Organisation,
     OrganisationSubscription,
@@ -371,6 +374,77 @@ def organisation_trial_change_plan(
         messages.info(
             request,
             "This is already your current trial plan.",
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    # ------------------------------------------
+    # TARGET PLAN LIMITS
+    # ------------------------------------------
+    plan_config = (
+        OrganisationSubscription.PLAN_CONFIG[
+            new_plan
+        ]
+    )
+    property_count = (
+        organisation.properties.count()
+    )
+    active_member_count = (
+        OrganisationMembership.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+        )
+        .count()
+    )
+    pending_invitation_count = (
+        OrganisationInvitation.objects
+        .filter(
+            organisation=organisation,
+            is_active=True,
+            accepted_at__isnull=True,
+        )
+        .count()
+    )
+    allocated_member_count = (
+        active_member_count
+        + pending_invitation_count
+    )
+    # ------------------------------------------
+    # TRIAL DOWNGRADE SAFETY
+    # ------------------------------------------
+    if (
+        property_count
+        > plan_config["property_limit"]
+    ):
+        messages.error(
+            request,
+            (
+                "This plan cannot be selected because "
+                f"the organisation currently has "
+                f"{property_count} properties, but "
+                f"the plan supports "
+                f"{plan_config['property_limit']}."
+            ),
+        )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
+    if (
+        allocated_member_count
+        > plan_config["member_limit"]
+    ):
+        messages.error(
+            request,
+            (
+                "This plan cannot be selected because "
+                f"the organisation currently has "
+                f"{allocated_member_count} allocated "
+                "team member places, but the plan "
+                f"supports {plan_config['member_limit']}."
+            ),
         )
         return redirect(
             "operations:organisation_account",

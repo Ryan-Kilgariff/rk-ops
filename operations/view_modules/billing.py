@@ -318,11 +318,7 @@ def organisation_subscription_change_plan(
     # CURRENT USAGE
     # ------------------------------------------
     property_count = (
-        organisation.properties
-        .filter(
-            is_active=True,
-        )
-        .count()
+        organisation.properties.count()
     )
     active_member_count = (
         OrganisationMembership.objects
@@ -348,11 +344,6 @@ def organisation_subscription_change_plan(
     # ------------------------------------------
     # NEW PLAN LIMITS
     # ------------------------------------------
-    new_config = (
-        OrganisationSubscription.PLAN_CONFIG[
-            new_plan
-        ]
-    )
     new_property_limit = (
         new_config["property_limit"]
     )
@@ -447,6 +438,10 @@ def organisation_subscription_change_plan(
                 "be started. Please try again."
             ),
         )
+        return redirect(
+            "operations:organisation_account",
+            organisation_slug=organisation.slug,
+        )
     if billing_session.provider_checkout_url:
         return redirect(
             billing_session.provider_checkout_url
@@ -501,11 +496,7 @@ def organisation_subscription_change_plan_confirm(
             "be selected directly."
         )
     property_count = (
-        organisation.properties
-        .filter(
-            is_active=True,
-        )
-        .count()
+        organisation.properties.count()
     )
     active_member_count = (
         OrganisationMembership.objects
