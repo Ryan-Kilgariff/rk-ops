@@ -566,25 +566,37 @@ def organisation_invite_member(
                         "If you weren't expecting this "
                         "invitation, you can ignore this email."
                     )
-                    send_mail(
-                        subject=subject,
-                        message=message,
-                        from_email=(
-                            settings.DEFAULT_FROM_EMAIL
-                        ),
-                        recipient_list=[
+                    try:
+                        send_mail(
+                            subject=subject,
+                            message=message,
+                            from_email=settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[
+                                invitation.email,
+                            ],
+                            fail_silently=False,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "Invitation email delivery could not be confirmed "
+                            "for %s",
                             invitation.email,
-                        ],
-                        fail_silently=False,
-                    )
-
-                    messages.success(
-                        request,
-                        (
-                            "Invitation sent to "
-                            f"{invitation.email}."
-                        ),
-                    )
+                        )
+                        messages.warning(
+                            request,
+                            (
+                                "The invitation was created, but RK Ops could "
+                                "not confirm email delivery."
+                            ),
+                        )
+                    else:
+                        messages.success(
+                            request,
+                            (
+                                "Invitation sent to "
+                                f"{invitation.email}."
+                            ),
+                        )
                     if source_property:
                         return redirect(
                             "operations:team_list",
@@ -1030,22 +1042,37 @@ def organisation_invitation_resend(
             f"{accept_url}\n\n"
             f"This invitation expires in 7 days."
         )
-        send_mail(
-            subject=subject,
-            message=message,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[
+                    invitation.email,
+                ],
+                fail_silently=False,
+            )
+        except Exception:
+            logger.exception(
+                "Invitation resend email delivery could not be "
+                "confirmed for %s",
                 invitation.email,
-            ],
-            fail_silently=False,
-        )
-        messages.success(
-            request,
-            (
-                f"Invitation resent to "
-                f"{invitation.email}."
-            ),
-        )
+            )
+            messages.warning(
+                request,
+                (
+                    "The invitation was renewed, but RK Ops could "
+                    "not confirm email delivery."
+                ),
+            )
+        else:
+            messages.success(
+                request,
+                (
+                    "Invitation resent to "
+                    f"{invitation.email}."
+                ),
+            )
     if source_property_slug:
         return redirect(
             "operations:team_list",
