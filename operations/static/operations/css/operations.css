@@ -2003,9 +2003,30 @@ a.account-list-item:hover {
     color: var(--success-text);
 }
 .onboarding-step-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
     color: var(--text);
-    font-size: 13px;
-    font-weight: 700;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        transform 0.15s ease;
+}
+.onboarding-step-action:hover {
+    background: var(--surface-subtle);
+    text-decoration: none;
+}
+.onboarding-step-action:active {
+    transform: translateY(1px);
 }
 /* --------------------------------------------------
    Trial / setup banners
